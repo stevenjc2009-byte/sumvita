@@ -1,0 +1,390 @@
+# bugcheck.tour - full on-screen bug check of Sumvita in Vita3K.
+# Run: powershell -File tests/vita3k/run.ps1 -Evidence <new dir> -TourFile tests/vita3k/bugcheck.tour
+# Commands: src/ui/tour_cmds.c. Every shot name is unique.
+log bugcheck start
+hist_clear
+set deg 1
+set dp -1
+set sf 0
+set exact 1
+
+# ---------------- Calc: real keypad input ----------------
+mode calc
+input
+shot calc_empty
+# type 3/4 + 5/6 with the d-pad + confirm: frac, 3, right, 4, right, +, frac, 5, right, 6, right
+key 8
+key 17
+key 26
+key 10
+key 26
+key 19
+key 8
+key 11
+key 26
+key 12
+shot kp_typing_frac
+# editor focus: UP/DOWN moves between numerator and denominator
+press UP 6
+press LEFT
+shot kp_editor_slot
+press DOWN
+press RIGHT 3
+key 24
+shot kp_frac_answer
+press SQUARE
+shot kp_frac_sd
+press SQUARE
+# backspace with the back button
+input 123+45
+focus editor
+press BACK 2
+shot kp_backspace
+# L/R mode switching
+press R
+shot lr_to_sci
+press R
+shot lr_to_alg
+press L 2
+shot lr_back_calc
+# TRIANGLE opens steps, BACK closes
+input 3/4+5/6
+eval auto
+press TRIANGLE
+shot kp_steps_open
+press BACK
+shot kp_steps_closed
+# SELECT opens settings, d-pad changes, BACK closes
+press SELECT
+shot set_open
+press RIGHT
+press DOWN
+press RIGHT
+shot set_changed
+press LEFT
+press UP
+press LEFT
+press BACK
+shot set_closed
+# system keyboard key (Calc index 29) - the tour closes it after one shot
+key 29
+wait 30
+shot osk_after
+
+# ---------------- Calc: headline + number types ----------------
+mode calc
+input 3/4+5/6
+eval auto
+shot h_frac_add
+alt 1
+shot h_frac_add_sd
+alt 0
+input 0.3(18)
+eval frac
+shot h_recur_bare
+input recur(0.3(18))
+eval frac
+shot h_recur
+input 20% of 300
+eval auto
+shot h_percent_of
+input 2_1/3+1_3/4
+eval auto
+shot c_mixed
+input 2^100
+eval auto
+shot c_big_pow
+input 30!
+eval auto
+shot c_factorial
+input 1/0
+eval auto
+shot e_div_zero
+input 2+
+eval auto
+shot e_trailing_op
+input
+eval auto
+shot e_empty
+# FDP buttons
+input 3/8
+eval dec
+shot f_to_dec
+eval pct
+shot f_to_pct
+input 0.375
+eval frac
+shot f_to_frac
+input 17/5
+eval mixed
+shot f_to_mixed
+input 123456789
+eval std
+shot f_to_std
+input √(48)
+eval surd
+shot f_to_surd
+# an FDP action through the real action bar
+input 7/8
+focus actions
+shot act_bar_focus
+press CONFIRM
+shot act_bar_applied
+
+# ---------------- Scientific ----------------
+mode sci
+input sin(150)
+eval auto
+shot h_sin150
+input √(48)+√(12)
+eval auto
+shot s_surds
+input cos(45)
+eval auto
+shot s_exact_cos45
+input tan(60)
+eval auto
+shot s_exact_tan60
+input 6.02×10^(23)×3
+eval auto
+shot s_std_form
+input √(-4)
+eval auto
+shot e_sqrt_neg
+input (1+√(5))/2+3^(2x)-root(3,27)+abs(-4)+2_1/3
+focus editor
+shot s_editor_long
+
+# ---------------- Settings effect ----------------
+set deg 0
+input sin(π/6)
+eval auto
+shot st_radians
+input sin(30)
+eval dec
+shot st_radians_sin30
+set deg 1
+set dp 3
+input 2/3
+eval dec
+shot st_dp3
+set dp -1
+set sf 3
+input 22/7
+eval dec
+shot st_sf3
+set sf 0
+mode calc
+set exact 0
+input 3/4+5/6
+eval auto
+shot st_prefer_dec
+set exact 1
+
+# ---------------- Algebra headlines ----------------
+mode alg
+input y(2x+4)
+eval factor
+shot h_factor_y
+steps
+shot h_factor_y_steps
+close
+input 2x^2y-8y+3x^2-12
+eval factor
+shot h_factor_grp
+steps
+shot h_factor_grp_steps_top
+press R 12
+shot h_factor_grp_steps_bot
+close
+input (x+1)(x+2)(x+3)
+eval expand
+shot h_expand
+steps
+shot h_expand_steps_top
+press R 12
+shot h_expand_steps_bot
+close
+input x^2-3x+1=0
+eval solve
+shot h_quad
+steps
+shot h_quad_steps_top
+press R 12
+shot h_quad_steps_bot
+close
+input x^2-5x+6=0
+eval solve
+shot a_list_answer
+input 2x+3y=12, x-y=1
+eval solve
+shot h_simul
+steps
+shot h_simul_steps_top
+press R 12
+shot h_simul_steps_bot
+close
+input -3<2x+1≤7
+eval solve
+shot h_ineq
+steps
+shot h_ineq_steps
+close
+input 2x^2+8x+3
+eval csq
+shot h_csq
+steps
+shot h_csq_steps_top
+press R 12
+shot h_csq_steps_bot
+close
+input y=(x+1)/(x-2)
+rearrange x
+shot h_rearrange
+steps
+shot h_rearrange_steps_top
+press R 12
+shot h_rearrange_steps_bot
+close
+# rearrange through the real action bar subject picker
+input v=u+at
+focus actions
+shot a_actions
+input x^2+1=0
+eval solve
+shot a_no_real
+input (x^2-4)/(x+2)
+eval simplify
+shot a_simplify
+
+# ---------------- Graph ----------------
+mode graph
+graph 0 x^2-2x-3
+graph 1 2x-1
+graph 2 sin(x)
+gview 0
+shot g_plot3
+gsel 0
+gview 1
+shot g_analysis_f1
+gsel 1
+gview 1
+shot g_analysis_f2
+gsel 2
+gview 1
+shot g_analysis_f3
+gsel 0
+gview 2
+shot g_table
+press DOWN 5
+shot g_table_down
+gview 3
+shot g_trace
+
+# ---------------- GCSE: one tool per category ----------------
+mode gcse
+gcat 0
+shot t_list_number
+tool hcf_lcm
+field 0 84
+field 1 90
+shot t_hcf_form
+run
+shot t_hcf_result
+steps
+shot t_hcf_steps
+close
+tool compound
+field 0 5000
+field 1 3.5
+field 2 4
+field 3 growth
+run
+shot t_compound_result
+tool bounds
+field 0 40
+field 1 10
+run
+shot t_bounds_result
+tool nth_quad
+field 0 4, 9, 16, 25, 36
+run
+shot t_nthquad_result
+steps
+shot t_nthquad_steps
+close
+tool ratio_share
+field 0 60
+field 1 2, 3
+run
+shot t_ratio_result
+tool cosine_angle
+field 0 7
+field 1 9
+field 2 12
+run
+shot t_cosine_result
+steps
+shot t_cosine_steps
+close
+tool area_circle
+field 0 5
+run
+shot t_circle_result
+tool tree_without
+field 0 3
+field 1 8
+field 2 two of type A
+run
+shot t_tree_result
+steps
+shot t_tree_steps
+close
+tool stat_freq
+field 0 1, 2, 3, 4
+field 1 5, 8, 4, 3
+run
+shot t_freq_result
+tool conv_temp
+field 0 100
+field 1 °C
+field 2 °F
+run
+shot t_temp_result
+gcat 6
+shot t_list_convert
+# real input on a tool form: d-pad to a field, confirm opens the entry sheet
+tool hcf_lcm
+press CONFIRM
+shot t_sheet
+press BACK
+shot t_sheet_closed
+
+# ---------------- History 20+ ----------------
+mode calc
+mem before_stress
+stress 60
+mem after_warmup
+stress 300
+mem after_300
+shot hist_after_stress
+focus history
+shot hist_focus_bottom
+press UP 8
+shot hist_up8
+press UP 40
+shot hist_top
+drag 300 150 120 10
+shot hist_drag
+focus editor
+drag 300 150 -600 20
+shot hist_scrolled_bottom
+
+# ---------------- About ----------------
+press SELECT
+press UP
+press CONFIRM
+shot about_page
+close
+log bugcheck end
+end

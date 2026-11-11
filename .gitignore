@@ -1,0 +1,6 @@
+build/
+build-ui/
+tests/build/
+.markers/
+__pycache__/
+*.pyc
