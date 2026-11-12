@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "arena.h"
-#include "calc_util.h"
+#include "calc_more.h"
 
 /* A canonical (ex_simplify) tree we can show exactly: numbers, π, roots of numbers. */
 static bool exact_disp(const Expr *e, int depth)
@@ -241,6 +241,12 @@ void calc_eval(const Expr *t, const CalcSettings *s, CalcResult *out)
     if (!cu_domain_ok(t, s->degrees, out)) return;
     CVal v;
     if (!cu_value(t, s->degrees, &v)) { cu_fail(out, "Maths error"); return; }
-    calc_eval_steps(t, s->degrees, &out->steps);
+    /* standard-form sums and surd fractions / brackets get the same GCSE working
+     * as their own actions; everything else gets the BIDMAS walk */
+    if (!cu_std_working(t, &out->steps)) {
+        int sw = cu_surd_working(t, &out->steps, out);
+        if (!out->ok) return;
+        if (sw <= 0) calc_eval_steps(t, s->degrees, &out->steps);
+    }
     cu_set_answer(&v, cu_has_decimal(t), has_mixed(t), s, out);
 }

@@ -86,7 +86,10 @@ static bool frac_add(const Rat *r, int n, Steps *st)
     if (!same)
         steps_add(st, asprintf_a("Use a common denominator of %lld", (long long)L), "Make the bottoms the same",
                   "%s=%s", lhs, mid);
-    steps_add(st, "Add the numerators", "Keep the bottom the same", "%s=%s", same ? lhs : mid, P(frac_raw(S, L)));
+    int neg = 0;
+    for (int i = 1; i < n; i++) neg += rat_is_neg(r[i]);
+    steps_add(st, neg == 0 ? "Add the numerators" : (neg == n - 1 ? "Subtract the numerators" : "Add and subtract the numerators"),
+              "Keep the bottom the same", "%s=%s", same ? lhs : mid, P(frac_raw(S, L)));
     cw_simplify_hcf(rat_int(S), rat_int(L), st);
     return true;
 }

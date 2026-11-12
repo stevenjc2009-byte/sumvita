@@ -90,7 +90,7 @@ static void rearrange(void)
 {
     RA("v=u+at", "t", "t=(v-u)/a");
     CHECK(has_step("Subtract u from both sides") && has_step("Divide both sides by a"), "v=u+at steps");
-    RA("A=πr^2", "r", "r=√(A/π)");
+    RA("A=πr^2", "r", "r=±√(A/π)");
     CHECK(has_step("Square root both sides") && has_note("±"), "A=πr^2: root step with ± note");
     RA("ax+b=cx+d", "x", "x=(d-b)/(a-c)");
     CHECK(has_step("Collect the x terms") && has_math("x(a-c)=d-b"), "ax+b=cx+d: collect + factorise");
@@ -100,7 +100,7 @@ static void rearrange(void)
     RA("y=3x-2", "x", "x=(y+2)/3");
     RA("P=2(l+w)", "w", "w=P/2-l");
     RA("v^2=u^2+2as", "s", "s=(v^2-u^2)/(2a)");
-    RA("E=1/2mv^2", "v", "v=√(2E/m)");
+    RA("E=1/2mv^2", "v", "v=±√(2E/m)");
     RA("y=√(x-3)", "x", "x=y^2+3");
     RA("V=4/3πr^3", "r", "r=root(3,3V/(4π))");
     RA("y=5-2x", "x", "x=(5-y)/2");
@@ -112,6 +112,21 @@ static void rearrange(void)
     RA("y=e^x", "x", "x=ln(y)");
     RA("y=2^x", "x", "x=log(2,y)");
     RA("y=x/3+4", "x", "x=3(y-4)");
+    /* F1 item 5: a square root (or any even root) is ± */
+    RA("y=2x^2", "x", "x=±√(y/2)");
+    CHECK(has_math("±√(y/2)=x") && has_note("±"), "y=2x^2: root step shows ±");
+    RA("y=(x+1)^2", "x", "x=-1±√y");
+    RA("y=3(x-2)^2+1", "x", "x=2±√((y-1)/3)");
+    RA("y=x^4", "x", "x=±root(4,y)");
+    RA("y=x^3", "x", "x=root(3,y)");
+    /* F1 item 9: square a fraction top and bottom, letter in front */
+    RA("T=2π√(l/g)", "l", "l=gT^2/(4π^2)");
+    CHECK(has_math("T^2/(4π^2)=l/g") && has_math("gT^2/(4π^2)=l"), "T=2π√(l/g): tidy square + multiply lines");
+    /* F1 item 10: π is treated like a letter when collecting; failures say why */
+    RA("A=πr^2+πrl", "r", "r=(-πl±√(4πA+π^2l^2))/(2π)");
+    CHECK(has_math("πr^2+πlr-A=0") && has_note("a=π, b=πl, c=-A"), "A=πr^2+πrl: π shown, not a placeholder");
+    RA("A=2πr+πr", "r", "r=A/(3π)");
+    RA("V=πr^2h+πh", "h", "h=V/(πr^2+π)");
     reset();
     CHECK_STR(run_alg(A_REARR, "y=x+1", "z", NULL), "ERR:There is no z in this formula");
     reset();
@@ -136,15 +151,22 @@ static void rearrange_quadratic(void)
     RA("y=ax^2+bx", "x", "x=(-b±√(b^2+4ay))/(2a)");
     RA("s=ut+1/2at^2", "t", "t=(-u±√(u^2+2as))/a");
     CHECK(has_step("Multiply every term by 2"), "s=ut+1/2at^2: fraction cleared");
-    RA("s=ut+1/2at^2", "u", "u=(s-1/2at^2)/t");
+    RA("s=ut+1/2at^2", "u", "u=(s-(1/2)at^2)/t");
     RA("y=(x^2+1)/x", "x", "x=(y±√(y^2-4))/2");
     RA("y=3x^2+x^2", "x", "x=±√(y/4)");
     reset();
-    CHECK_STR(run_alg(A_REARR, "y=x^3+x", "x", NULL), "ERR:Can't make x the subject of this formula");
+    /* F1 item 10: the failure says why in plain words */
+    CHECK_STR(run_alg(A_REARR, "y=x^3+x", "x", NULL),
+              "ERR:Can't make x the subject: x appears to the power 3 and to a lower power too, "
+              "and no rearranging step can undo both at once");
     reset();
-    CHECK_STR(run_alg(A_REARR, "y=sin(x)+x", "x", NULL), "ERR:Can't make x the subject of this formula");
+    CHECK_STR(run_alg(A_REARR, "y=sin(x)+x", "x", NULL),
+              "ERR:Can't make x the subject: x appears more than once and at least once inside "
+              "a root, power or function, so the x terms can't be collected together");
     reset();
-    CHECK_STR(run_alg(A_REARR, "y=x^4+x^2", "x", NULL), "ERR:Can't make x the subject of this formula");
+    CHECK_STR(run_alg(A_REARR, "y=x^4+x^2", "x", NULL),
+              "ERR:Can't make x the subject: x appears to the power 4 and to a lower power too, "
+              "and no rearranging step can undo both at once");
 }
 
 static void complete_square(void)

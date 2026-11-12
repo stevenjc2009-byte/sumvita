@@ -25,6 +25,14 @@ static bool has_title(const char *t)
     return false;
 }
 
+/* any step's title or note contains t */
+static bool has_note_f1(const char *t)
+{
+    for (int i = 0; i < st.n; i++)
+        if (strstr(st.v[i].title, t) || (st.v[i].note && strstr(st.v[i].note, t))) return true;
+    return false;
+}
+
 static bool has_math(const char *m)
 {
     for (int i = 0; i < st.n; i++)
@@ -161,9 +169,15 @@ static void unfactorisable(void)
         CHECK_STR(got, none[i]);
     }
     F("x^2+1");
-    CHECK(has_title("Can't factorise this any further over the rationals"), "x^2+1 message");
+    CHECK(has_title("Can't factorise this any further"), "x^2+1 message");
+    CHECK(!has_note_f1("rationals") && has_note_f1("multiply to give 1 and add to give 0"), "x^2+1: plain GCSE reason");
+    F("x^2-5");
+    CHECK(has_note_f1("multiply to give -5 and add to give 0") && !has_note_f1("p/q"), "x^2-5: plain GCSE reason");
+    F("2x^2-3");
+    CHECK(has_note_f1("a×c = -6 and add to give 0"), "2x^2-3: plain GCSE reason");
     F("x^2+x+1");
-    CHECK(has_title("Can't factorise this any further over the rationals"), "x^2+x+1 message");
+    CHECK(has_title("Can't factorise this any further"), "x^2+x+1 message");
+    CHECK(has_note_f1("multiply to give 1 and add to give 1"), "x^2+x+1: plain GCSE reason");
     CHECK(st.n == 1, "only the one step, got %d", st.n);
     CHECK_STR(F("sin(x)"), "ERR:Can only factorise polynomials");
     CHECK_STR(F("1/x"), "ERR:Can only factorise polynomials");

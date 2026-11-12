@@ -76,7 +76,8 @@ static bool exact_degrees(const Expr *arg, bool degrees, Rat *deg)
 
 static const char *QUAD[4] = {"1st", "2nd", "3rd", "4th"};
 
-static Expr *exact_trig(int f, Rat deg, const Expr *orig, Steps *st, CalcResult *out, bool *err)
+/* in_rad: the angle was given in radians (the message must not say degrees) */
+static Expr *exact_trig(int f, Rat deg, bool in_rad, const Expr *orig, Steps *st, CalcResult *out, bool *err)
 {
     if (deg.d != 1) return NULL;
     int64_t a = deg.n;
@@ -87,7 +88,8 @@ static Expr *exact_trig(int f, Rat deg, const Expr *orig, Steps *st, CalcResult 
     int ss = sgn(sin(rad)), cs = sgn(cos(rad));
     const char *name = f == F_SIN ? "sin" : (f == F_COS ? "cos" : "tan");
     if (f == F_TAN && cs == 0) {
-        cu_fail(out, "Maths error: tan %lld\xC2\xB0 is undefined", (long long)a);
+        if (in_rad) cu_fail(out, "Maths error: %s is undefined", ex_print(orig));
+        else cu_fail(out, "Maths error: tan %lld\xC2\xB0 is undefined", (long long)a);
         *err = true;
         return NULL;
     }
@@ -185,7 +187,8 @@ static Expr *prep(const Expr *e, Prep *p)
         double tmp;
         if (!ex_eval(c->kids[0], &env, &tmp)) return c;
         if (exact_degrees(c->kids[0], p->s->degrees, &deg))
-            v = exact_trig(c->op, deg, c, &p->out->steps, p->out, &p->err);
+            v = exact_trig(c->op, deg, !p->s->degrees && c->kids[0]->kind != E_DEG, c, &p->out->steps, p->out,
+                           &p->err);
         if (p->err) return NULL;
     } else if (c->op == F_ASIN || c->op == F_ACOS || c->op == F_ATAN) {
         v = exact_inverse(c->op, c->kids[0], p->s->degrees, c, &p->out->steps);

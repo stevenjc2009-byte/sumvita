@@ -12,7 +12,7 @@ CFLAGS  := -std=gnu11 -Wall -Wextra -Werror -O1 -g -I../src -fsanitize=address,u
 LDFLAGS := -fsanitize=address,undefined -lm
 
 # plus the UI's pure string helpers (no Vita calls) that have host tests
-ENGINE_SRCS := $(sort $(wildcard ../src/engine/*.c) $(wildcard ../src/tools/*.c)) ../src/ui/note_text.c
+ENGINE_SRCS := $(sort $(wildcard ../src/engine/*.c) $(wildcard ../src/tools/*.c)) ../src/ui/note_text.c ../src/ui/osk_text.c
 TEST_SRCS   := $(if $(T),$(T).c,$(sort $(wildcard test_*.c)))
 TEST_BINS   := $(patsubst %.c,build/%,$(TEST_SRCS))
 LIB_OBJS    := $(patsubst ../src/%.c,build/obj/%.o,$(ENGINE_SRCS))
@@ -28,6 +28,11 @@ build/libsumvita.a: $(LIB_OBJS)
 	ar rcs $@ $(LIB_OBJS)
 
 build/%: %.c testlib.h build/libsumvita.a
+	@mkdir -p build
+	$(CC) $(CFLAGS) $< build/libsumvita.a $(LDFLAGS) -o $@
+
+# Command-line runner for manual / agent checks (not part of `run`): build/sumcli ACTION "input"
+build/sumcli: sumcli.c build/libsumvita.a
 	@mkdir -p build
 	$(CC) $(CFLAGS) $< build/libsumvita.a $(LDFLAGS) -o $@
 

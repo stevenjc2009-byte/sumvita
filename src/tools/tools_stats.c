@@ -42,6 +42,20 @@ static const char *modes(const double *x, const double *w, int n)
     return astrdup(b);
 }
 
+/* 5+8-3+9 for the working; just the total when the list is too long to show */
+static const char *sum_expr(const double *a, int n)
+{
+    char b[400];
+    size_t len = 0;
+    b[0] = 0;
+    for (int i = 0; i < n; i++) {
+        const char *w = tu_w(a[i]);
+        len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", i && a[i] >= 0 ? "+" : "", w);
+        if (len >= sizeof b - 20) { double t = 0; for (int k = 0; k < n; k++) t += a[k]; return tu_w(t); }
+    }
+    return astrdup(b);
+}
+
 RUN(run_list_stats)
 {
     tu_begin(o);
@@ -60,7 +74,7 @@ RUN(run_list_stats)
     }
     const char *mo = modes(xs, w, k);
     ST("Put the numbers in order", "", "%s", dl(a, n, s, false));
-    ST("Mean", "Add up all the values, divide by how many", "(%s)/%d=%s", tu_w(sum), n, tu_w(mean));
+    ST("Mean", "Add up all the values, divide by how many", "(%s)/%d=%s/%d=%s", sum_expr(a, n), n, tu_w(sum), n, tu_w(mean));
     ST("Median", n % 2 ? "The middle value" : "Halfway between the two middle values", "%s", tu_w(med));
     tu_text(o, "Mode", asprintf_a("The most common value: %s", mo));
     ST("Range", "Biggest - smallest", "%s-%s=%s", tu_w(a[n - 1]), tu_w(a[0]), tu_w(rng));
@@ -119,7 +133,12 @@ RUN(run_grouped)
     double N = 0, tot = 0;
     int modal = 0;
     for (int i = 0; i < n; i++) {
-        if (up[i] <= lo[i] || f[i] < 0) { tu_fail(o, "Check class %d", i + 1); return; }
+        if (up[i] <= lo[i]) { tu_fail(o, "Class %d: the upper bound %s must be above the lower bound %s", i + 1, tu_w(up[i]), tu_w(lo[i])); return; }
+        if (f[i] < 0) { tu_fail(o, "Class %d: the frequency cannot be negative", i + 1); return; }
+        if (i && lo[i] < up[i - 1]) {
+            tu_fail(o, "Class %d starts at %s but class %d ends at %s: classes must be in order and not overlap", i + 1, tu_w(lo[i]), i, tu_w(up[i - 1]));
+            return;
+        }
         mid[i] = (lo[i] + up[i]) / 2;
         fm[i] = mid[i] * f[i];
         N += f[i]; tot += fm[i];
@@ -164,11 +183,13 @@ RUN(run_freq_density)
     double lo, up, x;
     if (!tu_num(o, "Class lower bound", v[1], &lo) || !tu_num(o, "Class upper bound", v[2], &up) || !tu_num(o, "Value", v[3], &x)) return;
     if (up <= lo) { tu_fail(o, "Upper bound must be above lower bound"); return; }
+    bool fd = tu_choice("frequency density|frequency", v[0]) == 0;
+    if (!tu_nonneg(o, fd ? "Frequency" : "Frequency density", x)) return;
     double w = up - lo;
     ST("Class width", "Upper bound - lower bound", "%s-%s=%s", tu_w(up), tu_w(lo), tu_w(w));
     ST("Frequency density", "frequency ÷ class width", "FD=f/w");
     double r;
-    if (tu_choice("frequency density|frequency", v[0]) == 0) {
+    if (fd) {
         r = x / w;
         ST("Substitute", "", "FD=%s/%s=%s", tu_w(x), tu_w(w), tu_w(r));
     } else {
@@ -209,20 +230,41 @@ RUN(run_stratified)
     int n;
     if (!tu_list(o, "Group sizes", v[0], g, TU_MAXLIST, &n) || !tu_num(o, "Sample size", v[1], &sample)) return;
     double tot = 0;
-    for (int i = 0; i < n; i++) tot += g[i];
-    if (tot <= 0 || sample <= 0) { tu_fail(o, "Sizes must be positive"); return; }
+    for (int i = 0; i < n; i++) {
+        if (g[i] < 0) { tu_fail(o, "Group %d: the size cannot be negative", i + 1); return; }
+        tot += g[i];
+    }
+    if (tot <= 0) { tu_fail(o, "Group sizes must add up to more than 0"); return; }
+    if (sample <= 0 || fabs(sample - round(sample)) > 1e-9) { tu_fail(o, "Sample size must be a positive whole number"); return; }
+    if (sample > tot) { tu_fail(o, "The sample (%s) cannot be larger than the population (%s)", tu_w(sample), tu_w(tot)); return; }
     ST("Total population", "", "%s", tu_w(tot));
+    double x[TU_MAXLIST], r[TU_MAXLIST], rsum = 0;
+    for (int i = 0; i < n; i++) {
+        x[i] = g[i] / tot * sample;
+        r[i] = round(x[i]);
+        rsum += r[i];
+        ST(asprintf_a("Group %d", i + 1), asprintf_a("group size ÷ total × sample size, rounded to %s", tu_w(r[i])), "%s/%s×%s=%s", tu_w(g[i]), tu_w(tot), tu_w(sample), tu_w(x[i]));
+    }
+    if (fabs(rsum - sample) > 1e-9) {
+        /* largest remainder: round every group down, then give the spare places to the biggest remainders (a tie goes to the bigger group) */
+        double left = sample;
+        for (int i = 0; i < n; i++) { r[i] = floor(x[i] + 1e-9); left -= r[i]; }
+        for (; left > 0.5; left--) {
+            int best = -1;
+            for (int i = 0; i < n; i++) {
+                double ri = x[i] - r[i], rb = best < 0 ? 0 : x[best] - r[best];
+                if (best < 0 || ri > rb + 1e-9 || (fabs(ri - rb) <= 1e-9 && g[i] > g[best])) best = i;
+            }
+            r[best] += 1;
+            x[best] = r[best];   /* its remainder is used up */
+        }
+        tu_text(o, "Adjust", asprintf_a("Rounding gave a total of %s, not %s: round every group down, then add 1 to the largest remainders until the total is %s.",
+                                        tu_w(rsum), tu_w(sample), tu_w(sample)));
+    }
     char b[300];
     size_t len = 0;
-    double rsum = 0;
     b[0] = 0;
-    for (int i = 0; i < n; i++) {
-        double x = g[i] / tot * sample, r = round(x);
-        rsum += r;
-        ST(asprintf_a("Group %d", i + 1), asprintf_a("group size ÷ total × sample size, rounded to %s", tu_w(r)), "%s/%s×%s=%s", tu_w(g[i]), tu_w(tot), tu_w(sample), tu_w(x));
-        len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", i ? ", " : "", tu_w(r));
-    }
-    if (fabs(rsum - sample) > 1e-9) tu_text(o, "Check", "After rounding the groups do not add up to the sample size: adjust the largest remainder.");
+    for (int i = 0; i < n; i++) len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", i ? ", " : "", tu_w(r[i]));
     tu_ans(o, astrdup(b), "");
 }
 
@@ -231,7 +273,8 @@ RUN(run_capture)
     tu_begin(o);
     double m1, n2, m2;
     if (!tu_num(o, "Marked in first catch", v[0], &m1) || !tu_num(o, "Second catch", v[1], &n2) || !tu_num(o, "Marked in second catch", v[2], &m2)) return;
-    if (m2 <= 0 || m1 <= 0 || n2 <= 0 || m2 > n2) { tu_fail(o, "Check the numbers (marked in second catch must be above 0)"); return; }
+    if (!tu_pos(o, "Marked in first catch", m1) || !tu_pos(o, "Second catch", n2) || !tu_pos(o, "Marked in second catch", m2)) return;
+    if (m2 > n2) { tu_fail(o, "Marked in second catch (%s) can't be more than the second catch (%s)", tu_w(m2), tu_w(n2)); return; }
     double N = m1 * n2 / m2;
     tu_text(o, "Capture-recapture", "Assume the marked fraction of the second catch matches the marked fraction of the whole population: (marked first) / N = (marked second) / (second catch)");
     ST("Substitute", "", "%s/N=%s/%s", tu_w(m1), tu_w(m2), tu_w(n2));

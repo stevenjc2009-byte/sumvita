@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "arena.h"
-#include "calc_util.h"
+#include "calc_more.h"
 
 #define TIMES "\xC3\x97"
 #define MAX_ROOT_STEPS 8
@@ -86,23 +86,33 @@ static bool by_root(const SurdSum *A, const SurdSum *B, const char *lhs, Steps *
     return true;
 }
 
-/* two-term bottom a+b: multiply by the conjugate a-b */
-static bool by_conjugate(const SurdSum *A, const SurdSum *B, const char *lhs, Steps *st, CalcResult *out)
+/* two-term bottom as written, a+b: multiply by the conjugate a-b ("change the
+ * sign in the middle"), so √3-1 uses √3+1 and the bottom comes out positive */
+static bool by_conjugate(const SurdSum *A, const SurdSum *B, const Expr *bot, const char *lhs, Steps *st,
+                         CalcResult *out)
 {
-    SurdSum conj = *B, top;
-    conj.t[1].c = rat_neg(conj.t[1].c);
+    SurdTerm w[2], cw[2];
+    if (cu_surd_terms(bot, w, 2) != 2 || w[0].b == w[1].b) { w[0] = B->t[0]; w[1] = B->t[1]; }
+    cw[0] = w[0];
+    cw[1] = w[1];
+    cw[1].c = rat_neg(cw[1].c);
+    SurdSum c0, c1, conj, top;
+    c0.n = c1.n = 1;
+    c0.t[0] = cw[0];
+    c1.t[0] = cw[1];
     Rat s0, s1, D;
-    if (!rat_mul(B->t[0].c, B->t[0].c, &s0) || !rat_mul(s0, rat_int(B->t[0].b), &s0) ||
-        !rat_mul(B->t[1].c, B->t[1].c, &s1) || !rat_mul(s1, rat_int(B->t[1].b), &s1) || !rat_sub(s0, s1, &D))
+    if (!ss_add(&c0, &c1, &conj) || !rat_mul(w[0].c, w[0].c, &s0) || !rat_mul(s0, rat_int(w[0].b), &s0) ||
+        !rat_mul(w[1].c, w[1].c, &s1) || !rat_mul(s1, rat_int(w[1].b), &s1) || !rat_sub(s0, s1, &D))
         return false;
     if (rat_is_zero(D)) { cu_fail(out, "Maths error: can't divide by 0"); return true; }
     if (!ss_mul(A, &conj, &top)) return false;
-    const char *bt = sum_text(B), *ct = sum_text(&conj), *at = wrap(A);
+    const char *bt = cu_terms_text(w, 2), *ct = cu_terms_text(cw, 2), *at = wrap(A);
     Rat one = rat_int(1), aq;
     bool a_is_one = ss_rational(A, &aq) && rat_eq(aq, one);
     steps_add(st, "Multiply the top and bottom by the conjugate", asprintf_a("Change the sign in the middle: %s", ct),
               "%s=%s(%s)/((%s)(%s))", lhs, at, ct, bt, ct);
-    SurdTerm a = B->t[0], b = B->t[1];
+    SurdTerm a = w[0], b = w[1];
+    a.c = rat_abs(a.c);
     b.c = rat_abs(b.c);
     steps_add(st, "Difference of two squares on the bottom", "(a+b)(a-b) = a^2-b^2", "(%s)(%s)=%s-%s=%s-%s=%s", bt,
               ct, square_text(a), square_text(b), cu_rat_str(s0), cu_rat_str(s1), cu_rat_str(D));
@@ -110,11 +120,39 @@ static bool by_conjugate(const SurdSum *A, const SurdSum *B, const char *lhs, St
     if (!rat_eq(D, one)) {
         SurdSum d, r;
         ss_rat(D, &d);
-        if (ss_div(&top, &d, &r))
-            steps_add(st, asprintf_a("Divide by %s", cu_rat_str(D)), "", "%s/%s=%s", wrap(&top),
-                      P(cu_rat_disp(D)), sum_text(&r));
+        if (ss_div(&top, &d, &r)) {
+            const char *over = asprintf_a("%s/%s", wrap(&top), P(cu_rat_disp(D))), *res = sum_text(&r);
+            if (strcmp(over, res) != 0)
+                steps_add(st, asprintf_a("Divide by %s", cu_rat_str(D)), "", "%s=%s", over, res);
+            else
+                steps_add(st, "Put the top over the new bottom", "", "%s=%s", lhs, res);
+        }
     }
     return true;
+}
+
+int cu_surd_working(const Expr *t, Steps *st, CalcResult *out)
+{
+    SurdSum whole, A, B;
+    if (!ss_from_expr(t, &whole)) return 0;
+    bool div = t->kind == E_DIV && t->nkids == 2 && ss_from_expr(t->kids[0], &A) && ss_from_expr(t->kids[1], &B) &&
+               ss_has_surd(&B) && B.n <= 2;
+    int before = st->n, nroot = 0;
+    Expr *shown = simplify_roots(t, st, &nroot, 0);
+    if (div) {
+        const char *lhs = P(shown);
+        bool ok = B.n == 1 ? by_root(&A, &B, lhs, st) : by_conjugate(&A, &B, shown->kids[1], lhs, st, out);
+        if (!out->ok) return 1;
+        if (!ok) { st->n = before; return -1; }
+        const char *ans = sum_text(&whole);
+        Step *last = st->n ? &st->v[st->n - 1] : NULL;
+        if (last && last->math && !strstr(last->math, asprintf_a("=%s", ans)))
+            steps_add(st, "Simplify", "", "%s", ans);
+        return 1;
+    }
+    if (cu_surd_expand(shown, &whole, st)) return 1;
+    st->n = before;
+    return 0;
 }
 
 void calc_surd(const Expr *t, const CalcSettings *s, CalcResult *out)
@@ -132,24 +170,13 @@ void calc_surd(const Expr *t, const CalcSettings *s, CalcResult *out)
         else calc_eval(t, s, out);
         return;
     }
+    int w = cu_surd_working(t, st, out);
+    if (!out->ok) return;
+    if (w < 0) { cu_fail(out, "Number too big"); return; }
+    if (w > 0) { finish(&whole, out); return; }
     int nroot = 0;
     Expr *shown = simplify_roots(t, st, &nroot, 0);
     const char *lhs = P(shown);
-    if (t->kind == E_DIV && t->nkids == 2) {
-        SurdSum A, B;
-        if (ss_from_expr(t->kids[0], &A) && ss_from_expr(t->kids[1], &B) && ss_has_surd(&B)) {
-            if (B.n > 2) { cu_fail(out, "Can't rationalise a bottom with 3 or more terms"); return; }
-            bool ok = B.n == 1 ? by_root(&A, &B, lhs, st) : by_conjugate(&A, &B, lhs, st, out);
-            if (!out->ok) return;
-            if (!ok) { cu_fail(out, "Number too big"); return; }
-            const char *ans = sum_text(&whole);
-            Step *last = st->n ? &st->v[st->n - 1] : NULL;
-            if (last && last->math && !strstr(last->math, asprintf_a("=%s", ans)))
-                steps_add(st, "Simplify", "", "%s", ans);
-            finish(&whole, out);
-            return;
-        }
-    }
     if (!ss_has_surd(&whole)) {
         st->n = 0;
         calc_eval(t, s, out);

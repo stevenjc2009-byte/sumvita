@@ -1,0 +1,14 @@
+# L-verify3.tour - reworded "=" toast in Algebra, tap Expand, empty FDP action in Calc.
+log L-verify3 start
+hist_clear
+mode alg
+osk ( x + 2 )( x + 3 )
+key 41
+shot v3_eq_same
+tap 274 441
+shot v3_tap_expand
+mode calc
+input
+tap 274 441
+shot v3_calc_empty_action
+end

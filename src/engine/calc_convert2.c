@@ -43,12 +43,19 @@ static void check_denominator(Rat r, Steps *st)
     int64_t other;
     if (r.d > 1000000000000LL) return;
     const char *ft = factor_text(r.d, &only25, &other);
+    /* "The denominator 12 = 2^2×3", or just "The denominator 3" when it is prime */
+    char num[24];
+    snprintf(num, sizeof num, "%lld", (long long)r.d);
+    const char *den = strcmp(num, ft) ? asprintf_a("The denominator %s = %s", num, ft) : asprintf_a("The denominator %s", num);
     if (only25)
-        steps_add(st, "Check the denominator", asprintf_a("%lld = %s has only 2s and 5s, so the decimal stops",
-                                                          (long long)r.d, ft), NULL);
+        steps_add(st, "Check the denominator", asprintf_a("%s has only 2s and 5s as prime factors, so the decimal stops", den),
+                  NULL);
+    else if (other == r.d)
+        steps_add(st, "Check the denominator",
+                  asprintf_a("%s has a prime factor other than 2 or 5, so the decimal recurs", den), NULL);
     else
         steps_add(st, "Check the denominator",
-                  asprintf_a("%lld = %s has the prime factor %lld, so the decimal recurs", (long long)r.d, ft,
+                  asprintf_a("%s has the prime factor %lld, which is not 2 or 5, so the decimal recurs", den,
                              (long long)other), NULL);
 }
 

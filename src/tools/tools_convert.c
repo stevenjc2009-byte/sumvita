@@ -24,11 +24,15 @@ static void conv(const char *const *v, const CalcSettings *s, CalcResult *o, con
 {
     tu_begin(o);
     double x;
-    if (!tu_num(o, "Value", v[0], &x)) return;
+    if (!tu_num(o, "Value", v[0], &x) || !tu_nonneg(o, "Value", x)) return;
     const Unit *from = &t[find_unit(t, n, v[1])], *to = &t[find_unit(t, n, v[2])];
     double ratio = from->f / to->f, r = x * ratio;
     if (from == to) { tu_text(o, "Same units", "Nothing to convert"); }
-    else {
+    else if (t == SPEED && ((from == &t[1] && to == &t[0]) || (from == &t[0] && to == &t[1]))) {
+        /* km/h and m/s: 1000 m per 3600 s, so ÷ 3.6 one way and × 3.6 back */
+        if (from == &t[1]) ST("Divide by 3.6", "km/h to m/s: 1000 m in 3600 s", "%s÷3.6=%s", tu_w(x), tu_w(r));
+        else ST("Multiply by 3.6", "m/s to km/h: 3600 s in 1000 m", "%s×3.6=%s", tu_w(x), tu_w(r));
+    } else {
         ST("Link the units", "How many of the new unit make one of the old unit", "%s", asprintf_a("1 \"%s\"=%s \"%s\"", from->name, tu_sf(ratio, 8), to->name));
         if (ratio >= 1) ST("Multiply", "Going to a smaller unit gives a bigger number", "%s×%s=%s", tu_w(x), tu_sf(ratio, 8), tu_w(r));
         else ST("Divide", "Going to a bigger unit gives a smaller number", "%s/%s=%s", tu_w(x), tu_sf(1 / ratio, 8), tu_w(r));
@@ -68,7 +72,7 @@ RUN(run_currency)
 {
     tu_begin(o);
     double amt, rate;
-    if (!tu_num(o, "Amount", v[0], &amt) || !tu_num(o, "Exchange rate (foreign per £1)", v[1], &rate)) return;
+    if (!tu_num(o, "Amount", v[0], &amt) || !tu_num(o, "Exchange rate (foreign per £1)", v[1], &rate) || !tu_nonneg(o, "Amount", amt)) return;
     if (rate <= 0) { tu_fail(o, "Rate must be positive"); return; }
     bool toforeign = tu_choice("£ to foreign|foreign to £", v[2]) == 0;
     ST("Exchange rate", "", "\"£\"1=%s", tu_w(rate));
@@ -88,10 +92,11 @@ RUN(run_hours)
     if (!to_hm && !tu_blank(v[2]) && !tu_num(o, "Minutes", v[2], &mins)) return;
     if (x < 0 || mins < 0) { tu_fail(o, "Time cannot be negative"); return; }
     if (to_hm) {
-        double h = floor(x + 1e-9), m = (x - h) * 60;
-        ST("Whole hours", "", "%s", tu_w(h));
-        ST("Minutes", "Multiply the decimal part by 60", "%s×60=%s", tu_w(x - h), tu_w(m));
-        tu_ans(o, asprintf_a("%s \"h\" %s \"min\"", tu_w(h), tu_w(tu_rsf(m, 6))), "");
+        double tm = floor(x * 60 + 0.5 + 1e-9), h = floor(tm / 60), m = tm - h * 60;   /* whole minutes */
+        ST("Minutes in total", "Multiply the hours by 60", "%s×60=%s", tu_w(x), tu_w(x * 60));
+        ST("Round to whole minutes", "", "%s", tu_w(tm));
+        ST("Hours and minutes", "60 minutes make 1 hour", "%s \"h\" %s \"min\"", tu_w(h), tu_w(m));
+        tu_ans(o, asprintf_a("%s \"h\" %s \"min\"", tu_w(h), tu_w(m)), "");
         tu_val(o, x);
     } else {
         double r = x + mins / 60;

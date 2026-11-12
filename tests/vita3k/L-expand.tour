@@ -1,0 +1,100 @@
+# L-expand.tour - Algebra Expand through the real keypad / action-row input path.
+# Alg keypad (6x7): x0 y1 a2 b3 c4 kbd5 / =6 <7 >8 le9 ge10 ,11 / sq12 pow13 sqrt14 frac15 (16 )17 /
+#  7 18 8 19 9 20 x21 /22 AC23 / 4 24 5 25 6 26 +27 -28 DEL29 / 1 30 2 31 3 32 L33 R34 n35 /
+#  0 36 .37 pi38 Ans39 k40 =41
+log L-expand start
+hist_clear
+set exact 1
+mode alg
+input
+shot a_empty
+# ( x + 2 ) ( x + 3 ) on the keypad
+key 16
+key 0
+key 27
+key 31
+key 17
+key 16
+key 0
+key 27
+key 32
+key 17
+shot a_typed
+# d-pad to the action row: LEFT from column 0
+press LEFT 6
+shot a_actions_focus
+press LEFT
+shot a_on_expand
+press CONFIRM
+shot a_expanded
+# tap Expand (touch): action 1 = x 188..360, y 424..458
+tap 274 441
+shot a_tap_expand
+eval auto
+shot a_after_eq
+# empty input then Expand
+key 23
+press LEFT 6
+press LEFT
+press CONFIRM
+shot a_empty_expand
+# after a previous answer: retype and use = then Expand
+key 16
+key 0
+key 27
+key 31
+key 17
+key 16
+key 0
+key 27
+key 32
+key 17
+key 41
+shot a_eq_answer
+press LEFT 6
+press LEFT
+press CONFIRM
+shot a_expand_after_eq
+# Ans then Expand
+key 39
+shot a_ans_typed
+press LEFT 4
+press LEFT
+press CONFIRM
+shot a_ans_expand
+# S<->D then Expand
+press SQUARE
+shot a_sd
+press CONFIRM
+shot a_sd_expand
+# steps open/close then Expand
+press TRIANGLE
+shot a_steps
+press BACK
+shot a_steps_closed
+press CONFIRM
+shot a_after_steps_expand
+# L/R round trip then Expand
+press R
+press L
+press CONFIRM
+shot a_lr_expand
+# x = - 2 , x = - 3 then Expand and =
+key 23
+key 0
+key 6
+key 28
+key 31
+key 11
+key 0
+key 6
+key 28
+key 32
+shot r_typed
+press LEFT 6
+press LEFT
+press CONFIRM
+shot r_expand
+key 41
+shot r_eq
+end

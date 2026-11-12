@@ -1,6 +1,7 @@
 /* tour_cmds.c - the commands of a tour script (tour.txt), one per line:
  *   mode calc|sci|alg|graph|gcse     close overlays, switch tab
  *   input TEXT / eval ACTION         set the editor (display syntax) / run an action
+ *   osk TEXT                         as if TEXT was accepted on the system keyboard
  *   rearrange VAR                    rearrange for VAR
  *   steps / close                    open the working of the current answer / close overlays
  *   focus editor|keypad|history|actions,  alt 0|1 (show the S<->D form)
@@ -136,6 +137,8 @@ static int calc_cmd(const char *cmd, const char *arg, int m)
 {
 	if (!strcmp(cmd, "input")) {
 		calc_screen_set_input(m, arg);
+	} else if (!strcmp(cmd, "osk")) {
+		cv_osk_accept(m, arg);
 	} else if (!strcmp(cmd, "eval")) {
 		int a = find_act(arg);
 		if (a < 0) log_printf("TOUR bad action '%s'", arg);

@@ -3,6 +3,7 @@
  * operation on both sides. When it appears more than once, rearrange_lin.c
  * collects the subject terms and factorises it out. */
 #include "solve_int.h"
+#include "arena.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -60,6 +61,7 @@ Expr *rr_mul(Expr *K, const Expr *m)
     if (K->kind == E_DIV && ex_equal(K->kids[1], m)) return K->kids[0];
     if (m->kind == E_NUM && K->kind == E_DIV) return ex_div2(ex_mul2(ex_clone(m), rr_par(K->kids[0])), K->kids[1]);
     if (m->kind == E_NUM) return ex_mul2(ex_clone(m), rr_par(K));
+    if (K->kind == E_DIV && (m->kind == E_VAR || m->kind == E_CONST)) return ex_div2(ex_mul2(ex_clone(m), rr_par(K->kids[0])), K->kids[1]);
     return ex_mul2(rr_par(K), rr_par(m));
 }
 
@@ -87,11 +89,45 @@ static int var_kid(const Expr *e, const char *v)
     return -1;
 }
 
+static bool has_add(const Expr *e)
+{
+    if (e->kind == E_ADD || e->kind == E_PM || e->kind == E_FUNC) return true;
+    for (int i = 0; i < e->nkids; i++)
+        if (has_add(e->kids[i])) return true;
+    return false;
+}
+
+/* K^n; a fraction of products is raised top and bottom: (T/(2π))^2 -> T^2/(4π^2) */
+static Expr *pow_side(Expr *K, const Expr *n)
+{
+    if (K->kind == E_DIV && !has_add(K) && ex_is_numeric(n)) {
+        Expr *t = ex_tidy(ex_simplify(ex_pow2(ex_clone(K->kids[0]), ex_clone(n))));
+        Expr *b = ex_tidy(ex_simplify(ex_pow2(ex_clone(K->kids[1]), ex_clone(n))));
+        if (t->kind != E_DIV && b->kind != E_DIV) return ex_div2(t, b);
+    }
+    return ex_pow2(rr_par(K), ex_clone(n));
+}
+
+/* ±e (an even root has two signs) */
+static Expr *pm_of(Expr *e) { return ex_node(E_PM, 1, &e); }
+
+static bool is_pm1(const Expr *e) { return e->kind == E_PM && e->nkids == 1; }
+
 static bool peel_add(Rr *r)
 {
     Expr *F = r->F;
     int i = var_kid(F, r->v), j = i == 0 ? 1 : 0;
     Expr *t = F->kids[j];
+    if (is_pm1(r->K)) {                    /* x+a=±s  ->  x=-a±s */
+        Expr *k2[2] = { rr_neg(t), r->K->kids[0] };
+        r->K = ex_node(E_PM, 2, k2);
+        r->F = others(F, j);
+        if (t->kind == E_NEG || (t->kind == E_NUM && rat_is_neg(t->r)))
+            show(r, sv_fmt("Add %s to both sides", ex_print(rr_neg(t))), NULL);
+        else
+            show(r, sv_fmt("Subtract %s from both sides", ex_print(t)), NULL);
+        return true;
+    }
     if (t->kind == E_NEG) {
         r->K = ex_is_zero(r->K) ? ex_clone(t->kids[0]) : ex_add2(r->K, ex_clone(t->kids[0]));
         r->F = others(F, j);
@@ -146,14 +182,15 @@ static bool peel_pow(Rr *r)
     if (rr_count(b, r->v)) {
         r->F = b;
         if (ex_is_int(n, &k) && k == 2) {
-            r->K = ex_func1(F_SQRT, r->K);
-            show(r, "Square root both sides", "Only the positive root is given; the full answer is ± this.");
+            r->K = pm_of(ex_func1(F_SQRT, r->K));
+            show(r, "Square root both sides", "A square root can be positive or negative, so write ±.");
         } else if (ex_is_int(n, &k) && k > 2) {
             r->K = ex_func2(F_ROOT, ex_int(k), r->K);
+            if (k % 2 == 0) r->K = pm_of(r->K);
             show(r, sv_fmt("Take the %s root of both sides", k == 3 ? "cube" : sv_fmt("%lldth", k)),
-                 k % 2 == 0 ? "Only the positive root is given; the full answer is ± this." : NULL);
+                 k % 2 == 0 ? "An even root can be positive or negative, so write ±." : NULL);
         } else if (n->kind == E_NUM && rat_eq(n->r, rat_make(1, 2))) {
-            r->K = ex_pow2(rr_par(r->K), ex_int(2));
+            r->K = pow_side(r->K, ex_int(2));
             show(r, "Square both sides", NULL);
         } else {
             r->K = ex_pow2(rr_par(r->K), ex_div2(ex_int(1), rr_par(n)));
@@ -181,12 +218,12 @@ static bool peel_func(Rr *r)
         { F_EXP, F_LN, "ln" },
     };
     if (F->op == F_SQRT && F->nkids == 1) {
-        r->F = F->kids[0]; r->K = ex_pow2(rr_par(K), ex_int(2));
+        r->F = F->kids[0]; r->K = pow_side(K, ex_int(2));
         show(r, "Square both sides", NULL);
         return true;
     }
     if (F->op == F_ROOT && F->nkids == 2 && !rr_count(F->kids[0], r->v)) {
-        r->F = F->kids[1]; r->K = ex_pow2(rr_par(K), ex_clone(F->kids[0]));
+        r->F = F->kids[1]; r->K = pow_side(K, F->kids[0]);
         show(r, sv_fmt("Raise both sides to the power %s", ex_print(F->kids[0])), NULL);
         return true;
     }
@@ -238,6 +275,57 @@ static bool peel(Rr *r)
     return false;
 }
 
+/* π is not a polynomial letter, so for collecting it stands in as the letter
+ * "#" (sorts first, so πr^2 keeps π in front) and is put back afterwards. */
+#define PI_LETTER "#"
+
+static Expr *pi_as_letter(const Expr *e)
+{
+    if (e->kind == E_CONST && e->op == C_PI) return ex_var(PI_LETTER);
+    Expr *c = ex_clone(e);
+    for (int i = 0; i < e->nkids; i++) c->kids[i] = pi_as_letter(e->kids[i]);
+    return c;
+}
+
+static bool has_pi(const Expr *e)
+{
+    if (e->kind == E_CONST && e->op == C_PI) return true;
+    for (int i = 0; i < e->nkids; i++)
+        if (has_pi(e->kids[i])) return true;
+    return false;
+}
+
+static const char *pi_back(const char *s)
+{
+    if (!s || !strchr(s, '#')) return s;
+    char *o = amalloc(strlen(s) * 2 + 1), *w = o;
+    for (; *s; s++) {
+        if (*s == '#') { *w++ = (char)0xCF; *w++ = (char)0x80; }
+        else *w++ = *s;
+    }
+    *w = 0;
+    return o;
+}
+
+static bool collect_pi(SvCtx *c, const Expr *e, Expr **out)
+{
+    if (!has_pi(e)) return rr_collect(c, e->kids[0], e->kids[1], out);
+    int n0 = c->st ? c->st->n : 0;
+    bool ok = rr_collect(c, pi_as_letter(e->kids[0]), pi_as_letter(e->kids[1]), out);
+    for (int i = n0; c->st && i < c->st->n; i++) {
+        Step *s = &c->st->v[i];
+        s->title = pi_back(s->title);
+        s->note = pi_back(s->note);
+        s->math = pi_back(s->math);
+    }
+    if (c->err) {
+        const char *m = pi_back(c->err);
+        if (m != c->err) snprintf(c->err, (size_t)c->errcap, "%s", m);
+    }
+    if (ok && *out) *out = ex_subst(*out, PI_LETTER, ex_const(C_PI));
+    return ok;
+}
+
 bool alg_rearrange(const Expr *e, const char *var, Steps *st, Expr **out, char *err, int errcap)
 {
     SvCtx c;
@@ -252,9 +340,11 @@ bool alg_rearrange(const Expr *e, const char *var, Steps *st, Expr **out, char *
     int nl = rr_count(e->kids[0], var), nr = rr_count(e->kids[1], var);
     if (nl + nr == 0) return sv_fail(&c, sv_fmt("There is no %s in this formula", var));
     c.last = ex_print(e);
-    if (nl + nr > 1) return rr_collect(&c, e->kids[0], e->kids[1], out);
+    if (nl + nr > 1) return collect_pi(&c, e, out);
     Rr r = { &c, c.var, ex_clone(nl ? e->kids[0] : e->kids[1]), ex_clone(nl ? e->kids[1] : e->kids[0]), nl > 0 };
-    if (!peel(&r)) return sv_fail(&c, sv_fmt("Can't make %s the subject of this formula", var));
+    if (!peel(&r))
+        return sv_fail(&c, sv_fmt("Can't make %s the subject: there is no inverse operation to undo what is done to %s",
+                                  var, var));
     if (!r.left) {
         r.left = true;
         show(&r, "Swap the sides", NULL);

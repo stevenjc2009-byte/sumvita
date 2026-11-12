@@ -26,7 +26,13 @@ No `e`-notation in input. Standard form is typed as `3.2×10^5` (`*` and `×` bo
 - `Ans` is the previous answer.
 
 ## Operators (lowest to highest precedence)
-1. `,` list (top level only; also separates function arguments)
+1. `,` list (top level only; also separates function arguments).
+   A bare `and` or `or` between two relations is the same as a comma: `x=-2 and x=-3`,
+   `2x+3y=12 and x-y=1`, `x=1 or x=2`, and with no spaces `x=-2andx=-3`, `x=1orx=2`.
+   Rule: no letter just before the word (a letter just after is fine; spaces are still
+   ignored) and the text on both sides, up to the next `,`/`and`/`or`, has a relation sign.
+   Anywhere else the letters are letters: `and` = a·n·d, `andx`, `2a+n`, `x=and`, `x=or+1`.
+   The echo shows commas.
 2. relations `=`, `<`, `>`, `<=`/`≤`, `>=`/`≥`, `!=`/`≠` (chains like `-3<2x+1<=9` allowed)
 3. `+`, `-`, `±`
 4. `*`, `×`, `/`, `÷`, implicit multiplication (`2x`, `3(x+1)`, `(x+1)(x-2)`, `2π`, `x sin(x)`).
@@ -57,5 +63,8 @@ No `e`-notation in input. Standard form is typed as `3.2×10^5` (`*` and `×` bo
 - Product of a number and a bracket prints as `3(x+1)`; product of brackets `(x+2)(x-2)`.
 - Coefficient first, variables alphabetical: `2x^2y` not `y2x^2`.
 - Negative terms print as subtraction: `x^2-4x+3`.
-- Rational coefficients print as fractions `(1/2)x` → printed `x/2` when the numerator is 1.
+- A number coefficient that is a fraction puts the whole term over its bottom: `(1/2)x` → `x/2`,
+  `(5/6)x` → `5x/6`, `(4/3)π` → `4π/3`, `(2/3)(x+1)` → `2(x+1)/3`. Never `5/6x`.
+- A typed fraction in front of a letter or number is bracketed: `2/3x` prints as `(2/3)x`;
+  in front of a bracket it stays `1/2(x+1)^2`. Each form re-parses to the same value.
 - A `*` is only printed between two numbers (`3*10^5` prints as `3×10^5`).

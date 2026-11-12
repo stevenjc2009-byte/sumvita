@@ -43,41 +43,50 @@ static const char *dots(Rat r, int nd)
     return asprintf_a("%s\xE2\x80\xA6", buf);
 }
 
-/* x = 0.3(18): 100x = 31.8(18), 99x = 31.5, x = 31.5/99 = 315/990 = 7/22 */
+static Expr *recur_of(Rat r)
+{
+    Expr *e = amalloc(sizeof(Expr));
+    e->kind = E_RECUR;
+    e->r = r;
+    return e;
+}
+
+/* The GCSE method. x = 0.0(4): 10x = 0.(4), 100x = 4.(4), 100x - 10x = 90x = 4,
+ * x = 4/90 = 2/45. With nothing before the repeat (0.(3)) one multiply is enough:
+ * 10x = 3.(3), 10x - x = 9x = 3. */
 static bool recurring(const Expr *t, CalcResult *out)
 {
     const char *txt = t->text, *lp = txt ? strchr(txt, '(') : NULL, *dot = txt ? strchr(txt, '.') : NULL;
     if (!lp || !dot || rat_is_neg(t->r) || t->r.d > 100000000) return false;
     int a = (int)(lp - dot - 1), rl = (int)strlen(lp) - 2;
-    if (rl < 1 || rl > 9) return false;
-    int64_t p10 = 1;
-    for (int i = 0; i < rl; i++) p10 *= 10;
-    Rat x = t->r, big, diff;
-    if (!rat_mul(x, rat_int(p10), &big) || !rat_mul(x, rat_int(p10 - 1), &diff)) return false;
-    const char *dd = cu_exact_dec(diff);
-    if (!dd) return false;
+    if (rl < 1 || rl > 9 || a < 0 || a + rl > 15) return false;
+    int64_t lo = 1, hi;
+    for (int i = 0; i < a; i++) lo *= 10;
+    hi = lo;
+    for (int i = 0; i < rl; i++) hi *= 10;
+    Rat x = t->r, xlo, xhi, k;
+    if (!rat_mul(x, rat_int(lo), &xlo) || !rat_mul(x, rat_int(hi), &xhi) || !rat_sub(xhi, xlo, &k) || k.d != 1)
+        return false;
     int nd = a + 2 * rl + 1;
     if (nd < 5) nd = 5;
     Steps *st = &out->steps;
     steps_add(st, "Call the number x", asprintf_a("x = %s", dots(x, nd)), "x=%s", ex_print(t));
-    Expr *bx = amalloc(sizeof(Expr));
-    bx->kind = E_RECUR;
-    bx->r = big;
-    steps_add(st, asprintf_a("Multiply by %lld", (long long)p10),
-              asprintf_a("%lld digit%s repeat%s, so move the point %d place%s: %lldx = %s", (long long)rl, rl == 1 ? "" : "s",
-                         rl == 1 ? "s" : "", rl, rl == 1 ? "" : "s", (long long)p10, dots(big, nd - rl)),
-              "%lldx=%s", (long long)p10, ex_print(bx));
-    steps_add(st, "Subtract to remove the repeating part", asprintf_a("%lldx - x = %lldx", (long long)p10, (long long)(p10 - 1)),
-              "%lldx=%s", (long long)(p10 - 1), dd);
-    steps_add(st, asprintf_a("Divide by %lld", (long long)(p10 - 1)), "", "x=%s/%lld", dd, (long long)(p10 - 1));
-    Rat top = diff, bot = rat_int(p10 - 1);
-    while (top.d != 1) {
-        if (!rat_mul(top, rat_int(10), &top) || !rat_mul(bot, rat_int(10), &bot)) return false;
-    }
-    if (!rat_eq(top, diff))
-        steps_add(st, "Make the top a whole number", "Multiply the top and bottom by 10 until it is", "%s/%lld=%s",
-                  dd, (long long)(p10 - 1), ex_print(ex_div2(ex_num(top), ex_num(bot))));
-    cw_simplify_hcf(top, bot, st);
+    if (a > 0)
+        steps_add(st, asprintf_a("Multiply by %lld", (long long)lo),
+                  asprintf_a("Move the point past the %s repeat: %lldx = %s", a == 1 ? "digit that doesn't" : "digits that don't",
+                             (long long)lo, dots(xlo, nd - a)),
+                  "%lldx=%s", (long long)lo, ex_print(recur_of(xlo)));
+    steps_add(st, asprintf_a("Multiply by %lld", (long long)hi),
+              asprintf_a("%d digit%s repeat%s, so move the point %d more place%s: %lldx = %s", rl, rl == 1 ? "" : "s",
+                         rl == 1 ? "s" : "", rl, rl == 1 ? "" : "s", (long long)hi, dots(xhi, nd - a - rl)),
+              "%lldx=%s", (long long)hi, ex_print(recur_of(xhi)));
+    const char *lox = a > 0 ? asprintf_a("%lldx", (long long)lo) : "x";
+    steps_add(st, "Subtract to remove the repeating part",
+              asprintf_a("%lldx - %s = %lldx", (long long)hi, lox, (long long)(hi - lo)), "%lldx=%lld",
+              (long long)(hi - lo), (long long)k.n);
+    steps_add(st, asprintf_a("Divide by %lld", (long long)(hi - lo)), "", "x=%lld/%lld", (long long)k.n,
+              (long long)(hi - lo));
+    cw_simplify_hcf(k, rat_int(hi - lo), st);
     return true;
 }
 
@@ -177,8 +186,10 @@ void calc_to_mixed(const Expr *t0, const CalcSettings *s, CalcResult *out)
     if (rat_is_neg(r)) sign = neg ? "" : "-";
     int64_t w = a.n / a.d, rem = a.n - w * a.d;
     if (t->kind != E_DIV || t->kids[0]->kind != E_NUM || t->kids[1]->kind != E_NUM ||
-        !rat_eq(t->kids[0]->r, rat_int(a.n)))
-        steps_add(st, "Write as an improper fraction", "", "%s=%s", ex_print(t), RD(r));
+        !rat_eq(t->kids[0]->r, rat_int(a.n))) {
+        const char *typed = ex_print(t), *imp = RD(r);
+        if (strcmp(typed, imp) != 0) steps_add(st, "Write as an improper fraction", "", "%s=%s", typed, imp);
+    }
     steps_add(st, "Divide the top by the bottom",
               asprintf_a("%lld \xC3\xB7 %lld = %lld remainder %lld", (long long)a.n, (long long)a.d, (long long)w,
                          (long long)rem),

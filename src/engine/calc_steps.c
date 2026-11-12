@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "arena.h"
-#include "calc_util.h"
+#include "calc_more.h"
 
 #define MAX_WALK_STEPS 60
 
@@ -113,6 +113,7 @@ void calc_eval_steps(const Expr *t, bool degrees, Steps *st)
     walk(t, &w, true, false);
     if (w.failed || (w.special == 0 && w.plain <= 1)) {
         st->n = w.start;
+        if (!w.failed) cu_one_line(t, degrees, st);
         return;
     }
     Step *first = &st->v[w.start];

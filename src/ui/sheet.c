@@ -8,6 +8,7 @@
 #include "ui/font.h"
 #include "ui/keypad.h"
 #include "ui/osk.h"
+#include "ui/osk_text.h"
 #include "ui/settings.h"
 #include "ui/theme.h"
 
@@ -76,8 +77,10 @@ static bool press(int idx)
 	case KC_OSK: {
 		char cur[512], out[512];
 		ed_serialize(&g_ed, cur, (int)sizeof cur);
-		if (osk_prompt(g_title, cur, OSK_TEXT, out, sizeof out) == 1)
+		if (osk_prompt(g_title, cur, OSK_TEXT, out, sizeof out) == 1) {
+			osk_text_tidy(out);
 			ed_load(&g_ed, out);
+		}
 		break;
 	}
 	case KC_DEGRAD:

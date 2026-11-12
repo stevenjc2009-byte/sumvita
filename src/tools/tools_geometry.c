@@ -8,10 +8,8 @@ static const char *un(const char *u) { return u ? u : ""; }
 static const char *surd_alt(double a, double b, bool plus)
 {
     if (fabs(a - round(a)) > 1e-9 || fabs(b - round(b)) > 1e-9) return "";
-    long long n = (long long)llround(plus ? a * a + b * b : a * a - b * b);
-    int64_t r;
-    if (n <= 0 || i64_isqrt_exact(n, &r)) return "";
-    return asprintf_a("√(%lld)", n);
+    const char *r = tu_surd((int64_t)llround(plus ? a * a + b * b : a * a - b * b));
+    return r ? r : "";
 }
 
 RUN(run_pythag)
@@ -151,7 +149,8 @@ RUN(run_polygon)
     ST("Sum of interior angles", "(n - 2) × 180°", "(%s-2)×180=%s°", tu_w(n), tu_w((n - 2) * 180));
     ST("Each exterior angle (regular)", "360° ÷ n", "360/%s=%s°", tu_w(n), tu_w(ext));
     ST("Each interior angle (regular)", "180° - exterior angle", "180-%s=%s°", tu_w(ext), tu_w(180 - ext));
-    tu_ans(o, asprintf_a("\"Sum\"=%s°, \"Interior\"=%s°, \"Exterior\"=%s°", tu_w((n - 2) * 180), tu_w(180 - ext), tu_w(ext)), "");
+    tu_ans(o, asprintf_a("\"Sum\"=%s°, \"Interior\"=%s°, \"Exterior\"=%s°", tu_w((n - 2) * 180), tu_w(180 - ext), tu_w(ext)),
+           mode ? asprintf_a("\"Sides\"=%s", tu_w(n)) : "");
     tu_val(o, (n - 2) * 180);
 }
 

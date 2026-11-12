@@ -73,6 +73,10 @@ bool ss_has_surd(const SurdSum *s);
 bool cu_sqrt_split(int64_t n, int64_t *k, int64_t *m);   /* n = k²·m, m squarefree (best effort) */
 void calc_surd(const Expr *t, const CalcSettings *s, CalcResult *out);
 
+/* ---- roots_eq.c ---- */
+/* "x=-2 and x=-3" -> x^2+5x+6=0 with working. false: not that form (out untouched). */
+bool calc_roots_eq(const Expr *t, CalcResult *out);
+
 /* ---- calc_convert*.c ---- */
 void calc_to_fraction(const Expr *t, const CalcSettings *s, CalcResult *out);
 void calc_to_mixed(const Expr *t, const CalcSettings *s, CalcResult *out);

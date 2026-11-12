@@ -100,7 +100,20 @@ bool fac_root(FCtx *c, int i, FSplit *s)
         c->noroots = true;
         if (deg <= 3) {
             c->proven = true;
-            if (!c->why) c->why = "No fraction p/q (p a factor of the constant, q of the first coefficient) gives f(x)=0, so there are no linear factors.";
+            if (c->why) {
+            } else if (deg == 2 && rat_is_one(a[2])) {
+                c->why = asprintf_a("No two whole numbers or fractions multiply to give %s and add to give %s, "
+                                    "so it does not factorise.", alg_rstr(a[0]), alg_rstr(a[1]));
+            } else if (deg == 2) {
+                Rat ac;
+                c->why = rat_mul(a[2], a[0], &ac)
+                    ? asprintf_a("No two whole numbers or fractions multiply to give a×c = %s and add to give %s, "
+                                 "so it does not factorise.", alg_rstr(ac), alg_rstr(a[1]))
+                    : "No two whole numbers or fractions multiply to give a×c and add to give b, so it does not factorise.";
+            } else {
+                c->why = "Putting in each whole number or fraction that could work (factors of the last number over "
+                         "factors of the first) never gives 0, so there is no bracket like (x-a).";
+            }
         }
     }
     return false;

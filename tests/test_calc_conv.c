@@ -46,10 +46,10 @@ static void to_fraction(void)
     STEP(F, "0.375", "Simplify by the HCF 125", "375/1000=3/8");
     CHECK_STR(A(F, "recur(0.3(18))"), "7/22");
     STEP(F, "recur(0.3(18))", "Call the number x", "x=recur(0.3(18))");
-    STEP(F, "recur(0.3(18))", "Multiply by 100", "100x=recur(31.(81))");
-    STEP(F, "recur(0.3(18))", "Subtract to remove", "99x=31.5");
-    STEP(F, "recur(0.3(18))", "Divide by 99", "x=31.5/99");
-    STEP(F, "recur(0.3(18))", "Make the top a whole number", "31.5/99=315/990");
+    STEP(F, "recur(0.3(18))", "Multiply by 10", "10x=recur(3.(18))");
+    STEP(F, "recur(0.3(18))", "Multiply by 1000", "1000x=recur(318.(18))");
+    STEP(F, "recur(0.3(18))", "Subtract to remove", "990x=315");
+    STEP(F, "recur(0.3(18))", "Divide by 990", "x=315/990");
     STEP(F, "recur(0.3(18))", "Simplify by the HCF 45", "315/990=7/22");
     CHECK_STR(A(F, "recur(0.(3))"), "1/3");
     CHECK_STR(A(F, "0.3(18)"), "7/22");
@@ -124,9 +124,9 @@ static void std_form(void)
     const CalcAction X = ACT_STD_FORM;
     CHECK_STR(A(X, "0.00042"), "4.2" TIMES "10^-4");
     CHECK_STR(A(X, "3200000"), "3.2" TIMES "10^6");
-    CHECK_STR(A(X, "4.2" TIMES "10^-4"), "0.00042");
+    CHECK_STR(A(X, "4.2" TIMES "10^-4"), "4.2" TIMES "10^-4");
     STEP(X, "4.2" TIMES "10^-4", "Move the decimal point 4 places left", "4.2" TIMES "10^-4=0.00042");
-    CHECK_STR(A(X, "3.2" TIMES "10^6"), "3200000");
+    CHECK_STR(A(X, "3.2" TIMES "10^6"), "3.2" TIMES "10^6");
     CHECK_STR(A(X, "(3" TIMES "10^4)" TIMES "(2" TIMES "10^5)"), "6" TIMES "10^9");
     STEP(X, "(3" TIMES "10^4)" TIMES "(2" TIMES "10^5)", "Add the powers of 10", "10^4" TIMES "10^5=10^9");
     CHECK_STR(A(X, "(5" TIMES "10^3)" TIMES "(4" TIMES "10^2)"), "2" TIMES "10^6");

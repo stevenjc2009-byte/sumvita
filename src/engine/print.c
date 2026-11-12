@@ -134,15 +134,19 @@ static Out mul_out(const Expr *e, bool plain)
     int start = 1;
     const Expr *c = f[0];
     if (n >= 2 && c->kind == E_NUM && c->r.d != 1 && !(c->flags & (EF_PAREN | NF_DECIMAL))) {
-        /* rational coefficient: (1/2)x -> x/2, (2/3)x -> 2/3x */
-        if (c->r.n == 1 || c->r.n == -1) {
-            SB num = {0};
-            for (int i = 1; i < n; i++) join_factor(&num, pr(f[i], i == 1 ? PL_MUL : PL_POW, true, plain).s, plain);
-            return mk(asprintf_a("%s%s/%lld", c->r.n < 0 ? "-" : "", sb_str(&num), (long long)c->r.d), PL_MUL);
-        }
-        sb_puts(&b, asprintf_a("%lld/%lld", (long long)c->r.n, (long long)c->r.d));
+        /* rational coefficient goes over the whole product: (1/2)x -> x/2, (5/6)x -> 5x/6,
+         * (4/3)π -> 4π/3 (never 4/3π, which reads as 4/(3π)) */
+        SB num = {0};
+        long long top = c->r.n < 0 ? -(long long)c->r.n : (long long)c->r.n;
+        if (top != 1) sb_puts(&num, asprintf_a("%lld", top));
+        for (int i = 1; i < n; i++)
+            join_factor(&num, pr(f[i], i == 1 && top == 1 ? PL_MUL : PL_POW, true, plain).s, plain);
+        return mk(asprintf_a("%s%s/%lld", c->r.n < 0 ? "-" : "", sb_str(&num), (long long)c->r.d), PL_MUL);
     } else {
-        sb_puts(&b, pr(c, PL_MUL, true, plain).s);
+        /* a fraction in front of a letter or number is bracketed: (4/3)π, never 4/3π (reads
+         * as 4/(3π)); in front of a bracket it stays 1/2(x+1)^2 */
+        bool brk = n >= 2 && c->kind == E_DIV && pr(f[1], PL_POW, true, plain).s[0] != '(';
+        sb_puts(&b, pr(c, brk ? PL_POW : PL_MUL, true, plain).s);
     }
     for (int i = start; i < n; i++) join_factor(&b, pr(f[i], PL_POW, true, plain).s, plain);
     return mk(sb_str(&b), PL_MUL);

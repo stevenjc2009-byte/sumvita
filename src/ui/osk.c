@@ -139,7 +139,8 @@ int osk_prompt(const char *title, const char *initial, osk_kind_t kind, char *ou
 	/* Type, languages and forcing left at their defaults: the keyboard follows the
 	 * languages the user enabled, so accented and Japanese titles can be searched. */
 	p.type = kind == OSK_URL ? SCE_IME_TYPE_URL : SCE_IME_TYPE_DEFAULT;
-	p.option = 0;
+	/* every text field here takes maths: the keyboard must not turn the first x into X */
+	p.option = kind == OSK_TEXT ? SCE_IME_OPTION_NO_AUTO_CAPITALIZATION : 0;
 	p.dialogMode = SCE_IME_DIALOG_DIALOG_MODE_DEFAULT;
 	p.textBoxMode = kind == OSK_PASSWORD ? SCE_IME_DIALOG_TEXTBOX_MODE_PASSWORD
 	                                     : SCE_IME_DIALOG_TEXTBOX_MODE_DEFAULT;

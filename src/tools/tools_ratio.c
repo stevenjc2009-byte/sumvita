@@ -47,7 +47,7 @@ RUN(run_ratio_share)
     double amt;
     Rat r[16];
     int n;
-    if (!tu_num(o, "Amount", v[0], &amt) || !tu_ratlist(o, "Ratio", v[1], r, 16, &n)) return;
+    if (!tu_num(o, "Amount", v[0], &amt) || !tu_ratlist(o, "Ratio", v[1], r, 16, &n) || !tu_nonneg(o, "Amount", amt)) return;
     int64_t p[16], tot = 0;
     if (!ratio_ints(o, r, n, p)) return;
     for (int i = 0; i < n; i++) tot += p[i];
@@ -59,14 +59,23 @@ RUN(run_ratio_share)
         ST("Add the parts of the ratio", "", "%s=%lld", sum, (long long)tot);
     }
     ST("Find the value of one part", "Divide the amount by the total parts", "%s÷%lld=%s", tu_w(amt), (long long)tot, tu_w(one));
-    char buf[256] = "";
-    size_t len = 0;
+    /* exact shares as fractions when the amount is rational; money-style 2 d.p. if any share does not end */
+    Rat ra, ex[16];
+    bool exact = rat_from_double(amt, 1000000, &ra), ends = true;
+    for (int i = 0; i < n && exact; i++) {
+        exact = rat_mul(ra, RAT(p[i], tot), &ex[i]);
+        ends = ends && exact && rat_terminates(ex[i]);
+    }
+    char buf[256] = "", fx[256] = "";
+    size_t len = 0, fl = 0;
     for (int i = 0; i < n; i++) {
         double sh = one * (double)p[i];
         ST(asprintf_a("Share %d", i + 1), "Multiply by the number of parts", "%lld×%s=%s", (long long)p[i], tu_w(one), tu_w(sh));
-        len += (size_t)snprintf(buf + len, sizeof buf - len, "%s%s", i ? ", " : "", tu_f(sh, s, 8, -1));
+        len += (size_t)snprintf(buf + len, sizeof buf - len, "%s%s", i ? ", " : "", ends || !exact ? tu_f(sh, s, 8, -1) : tu_f(sh, s, 3, 2));
+        if (exact) fl += (size_t)snprintf(fx + fl, sizeof fx - fl, "%s%s", i ? ", " : "", tu_rs(ex[i]));
     }
-    tu_ans(o, astrdup(buf), "");
+    if (exact && !ends) tu_pair(o, s, astrdup(buf), astrdup(fx));
+    else tu_ans(o, astrdup(buf), "");
 }
 
 RUN(run_ratio_combine)
@@ -97,7 +106,7 @@ RUN(run_ratio_known)
     int n;
     int64_t k;
     double known;
-    if (!tu_ratlist(o, "Ratio", v[0], r, 16, &n) || !tu_int(o, "Part number", v[1], &k) || !tu_num(o, "Known amount", v[2], &known)) return;
+    if (!tu_ratlist(o, "Ratio", v[0], r, 16, &n) || !tu_int(o, "Part number", v[1], &k) || !tu_num(o, "Known amount", v[2], &known) || !tu_nonneg(o, "Known amount", known)) return;
     if (k < 1 || k > n) { tu_fail(o, "Part number must be 1 to %d", n); return; }
     int64_t p[16], tot = 0;
     if (!ratio_ints(o, r, n, p)) return;
@@ -200,6 +209,7 @@ static void tri_run(const char *const *v, CalcResult *o, const char *n1, const c
     if (b1 + b2 + b3 != 1) { tu_fail(o, "Leave exactly one box empty: the one to find"); return; }
     double q1 = 0, q2 = 0, q3 = 0, ans;
     if ((!b1 && !tu_num(o, n1, v[0], &q1)) || (!b2 && !tu_num(o, n2, v[1], &q2)) || (!b3 && !tu_num(o, n3, v[2], &q3))) return;
+    if ((!b1 && !tu_nonneg(o, n1, q1)) || (!b2 && !tu_nonneg(o, n2, q2)) || (!b3 && !tu_nonneg(o, n3, q3))) return;
     char units[80];
     snprintf(units, sizeof units, "%s", v[3] ? v[3] : "");
     char *u[3] = { "", "", "" };
@@ -238,7 +248,7 @@ RUN(run_scale)
     double k, orig = 0;
     if (!tu_num(o, "Scale factor", v[0], &k)) return;
     bool have = !tu_blank(v[2]);
-    if (have && !tu_num(o, "Original value", v[2], &orig)) return;
+    if (have && (!tu_num(o, "Original value", v[2], &orig) || !tu_nonneg(o, "Original value", orig))) return;
     if (k <= 0) { tu_fail(o, "Scale factor must be positive"); return; }
     int kind = tu_choice("length|area|volume", v[1]);
     double len = kind == 0 ? k : kind == 1 ? sqrt(k) : cbrt(k);

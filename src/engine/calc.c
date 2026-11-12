@@ -9,6 +9,7 @@
 #include "arena.h"
 #include "calc.h"
 #include "calc_util.h"
+#include "simplify_int.h"
 
 void calc_settings_default(CalcSettings *s)
 {
@@ -161,6 +162,12 @@ void calc_simplify(const Expr *t, const CalcSettings *s, CalcResult *out)
         out->answer = ex_print(res);
         return;
     }
+    /* expand / common denominator / collect with GCSE working (simplify_steps.c) */
+    Expr *w = NULL;
+    if (simp_working(t, &out->steps, &w) && w) {
+        out->answer = ex_print(w);
+        return;
+    }
     Expr *simp = ex_simplify(t);
     const char *ans = ex_print(cu_pretty(ex_tidy(simp)));
     const char *echo = ex_print(t);
@@ -260,6 +267,8 @@ static void run_algebra(CalcAction a, const Expr *t, const CalcSettings *s, Calc
 
 static void dispatch(CalcAction a, const Expr *t, const CalcSettings *s, CalcResult *out)
 {
+    /* solutions -> equation: "x=-2 and x=-3" on =, Solve or Expand (roots_eq.c) */
+    if ((a == ACT_AUTO || a == ACT_SOLVE || a == ACT_EXPAND) && calc_roots_eq(t, out)) return;
     if (a == ACT_AUTO) {
         if (is_relation_input(t)) a = ACT_SOLVE;
         else if (!ex_has_var(t, NULL)) a = ACT_EVAL;

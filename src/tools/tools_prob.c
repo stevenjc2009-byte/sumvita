@@ -69,9 +69,10 @@ RUN(run_expected)
     if (!tu_prob(o, "Probability", v[0], &p) || !tu_num(o, "Number of trials", v[1], &n)) return;
     if (n < 0) { tu_fail(o, "Trials cannot be negative"); return; }
     double r = rat_to_double(p) * n;
-    ST("Expected frequency", "probability × number of trials", "%s×%s=%s", tu_rs(p), tu_w(n), tu_w(r));
-    tu_ans(o, tu_f(r, s, 8, -1), "");
-    tu_val(o, r);
+    ST("Expected frequency", "probability × number of trials", "%s×%s=%s", tu_rp(p), tu_w(n), tu_w(r));
+    Rat rn, exact;
+    if (rat_from_double(n, 1000000, &rn) && rat_mul(p, rn, &exact)) tu_rat_ans(o, s, exact, 3, -1);
+    else { tu_ans(o, tu_f(r, s, 3, -1), ""); tu_val(o, r); }
 }
 
 RUN(run_relative)
@@ -103,10 +104,10 @@ static void tree(const char *const *v, CalcResult *o, bool replace)
        "P(A)=%s, P(B)=%s", tu_rs(a_a), tu_rs(a_b));
     ST("Second pick, after B first", "", "P(A)=%s, P(B)=%s", tu_rs(b_a), tu_rs(b_b));
     Rat AA = M(pa, a_a), AB = M(pa, a_b), BA = M(pb, b_a), BB = M(pb, b_b);
-    ST("Multiply along the branches", "", "AA=%s×%s=%s", tu_rs(pa), tu_rs(a_a), tu_rs(AA));
-    ST("", "", "AB=%s×%s=%s", tu_rs(pa), tu_rs(a_b), tu_rs(AB));
-    ST("", "", "BA=%s×%s=%s", tu_rs(pb), tu_rs(b_a), tu_rs(BA));
-    ST("", "", "BB=%s×%s=%s", tu_rs(pb), tu_rs(b_b), tu_rs(BB));
+    ST("Branch AA: multiply along it", "A then A", "AA=%s×%s=%s", tu_rs(pa), tu_rs(a_a), tu_rs(AA));
+    ST("Branch AB: multiply along it", "A then B", "AB=%s×%s=%s", tu_rs(pa), tu_rs(a_b), tu_rs(AB));
+    ST("Branch BA: multiply along it", "B then A", "BA=%s×%s=%s", tu_rs(pb), tu_rs(b_a), tu_rs(BA));
+    ST("Branch BB: multiply along it", "B then B", "BB=%s×%s=%s", tu_rs(pb), tu_rs(b_b), tu_rs(BB));
     int m = tu_choice("two of type A|one of each|at least one of type A|none of type A|both the same type", v[2]);
     Rat res;
     const char *how;
@@ -133,7 +134,7 @@ RUN(run_conditional)
     Rat r;
     if (!rat_div(ab, pb, &r) || rat_cmp(r, rat_int(1)) > 0) { tu_fail(o, "P(A and B) cannot be bigger than P(B)"); return; }
     tu_text(o, "Conditional probability", "P(A given B) = P(A and B) ÷ P(B): the chance of A, given that B has happened");
-    ST("Substitute", "", "%s/%s=%s", tu_rs(ab), tu_rs(pb), tu_rs(r));
+    ST("Substitute", "", "%s÷%s=%s", tu_rp(ab), tu_rp(pb), tu_rs(r));
     out_rat(o, r);
 }
 

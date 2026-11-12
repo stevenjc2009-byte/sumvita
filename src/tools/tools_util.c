@@ -3,6 +3,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#include "../engine/calc_util.h"
+
 /* ---------------- result helpers ---------------- */
 
 void tu_begin(CalcResult *o)
@@ -61,6 +63,18 @@ bool tu_blank(const char *txt)
     if (!txt) return true;
     while (*txt == ' ' || *txt == '\t') txt++;
     return *txt == 0;
+}
+
+bool tu_nonneg(CalcResult *o, const char *label, double x)
+{
+    if (x < 0) { tu_fail(o, "%s cannot be negative", label); return false; }
+    return true;
+}
+
+bool tu_pos(CalcResult *o, const char *label, double x)
+{
+    if (x <= 0) { tu_fail(o, "%s must be positive", label); return false; }
+    return true;
 }
 
 Expr *tu_expr(CalcResult *o, const char *label, const char *txt)
@@ -228,12 +242,24 @@ const char *tu_sf(double x, int sf)
 
 const char *tu_w(double x) { return tu_sf(x, 6); }
 
+/* x to sf significant figures. Trailing zeros are kept when rounding changed the value
+ * (12.99 to 3 s.f. is 13.0, not 13); an exact value stays plain (5, not 5.00). */
+static const char *sf_keep(double x, int sf)
+{
+    if (x == 0 || !isfinite(x)) return astrdup("0");
+    if (sf < 1) sf = 1;
+    double r = tu_rsf(x, sf);
+    if (fabs(r - x) <= 1e-9 * fabs(x)) return tu_sf(x, sf);
+    int dec = sf - 1 - (int)floor(log10(fabs(r)));
+    return tu_dp(r, dec < 0 ? 0 : dec);
+}
+
 const char *tu_f(double x, const CalcSettings *s, int def_sf, int def_dp)
 {
     if (s && s->dp >= 0) return tu_dp(x, s->dp);
-    if (s && s->sf > 0) return tu_sf(x, s->sf);
+    if (s && s->sf > 0) return sf_keep(x, s->sf);
     if (def_dp >= 0) return tu_dp(x, def_dp);
-    return tu_sf(x, def_sf);
+    return sf_keep(x, def_sf);
 }
 
 const char *tu_rs(Rat r)
@@ -241,6 +267,31 @@ const char *tu_rs(Rat r)
     char b[64];
     rat_to_str(r, b, sizeof b);
     return astrdup(b);
+}
+
+const char *tu_rp(Rat r)
+{
+    return (rat_is_neg(r) || r.d != 1) ? asprintf_a("(%s)", tu_rs(r)) : tu_rs(r);
+}
+
+const char *tu_surd(int64_t n)
+{
+    int64_t k, m;
+    if (n <= 0 || !cu_sqrt_split(n, &k, &m) || m == 1) return NULL;
+    SurdSum ss;
+    ss.n = 1;
+    ss.t[0].c = rat_int(k);
+    ss.t[0].b = m;
+    Expr *e = ss_to_expr(&ss);
+    return e ? ex_print(e) : NULL;
+}
+
+void tu_rat_ans(CalcResult *o, const CalcSettings *s, Rat r, int def_sf, int def_dp)
+{
+    double x = rat_to_double(r);
+    if (rat_terminates(r)) tu_ans(o, tu_f(x, s, 8, -1), "");
+    else tu_pair(o, s, tu_f(x, s, def_sf, def_dp), tu_rs(r));
+    tu_val(o, x);
 }
 
 const char *tu_u(const char *num, const char *unit)

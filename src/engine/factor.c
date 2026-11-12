@@ -144,7 +144,7 @@ bool alg_factor(const Expr *e, Steps *st, Expr **out, char *err, int errcap)
         return false;
     }
     if (poly_is_zero(&p) || poly_is_const(&p, NULL)) {
-        steps_add(st, "Can't factorise this any further over the rationals", "It is just a number.", "%s", ex_print(e));
+        steps_add(st, "Can't factorise this any further", "It is just a number.", "%s", ex_print(e));
         *out = ex_clone(e);
         return true;
     }
@@ -160,7 +160,7 @@ bool alg_factor(const Expr *e, Steps *st, Expr **out, char *err, int errcap)
         bool proven = c->proven || c->nbr == 0;
         const char *why = c->why ? c->why : (c->nbr == 0 ? "It is a single term." :
             "None of the methods (common factor, quadratics, two squares, cubes, grouping, factor theorem) find a factor.");
-        steps_add(st, proven ? "Can't factorise this any further over the rationals" : "No factors found",
+        steps_add(st, proven ? "Can't factorise this any further" : "No factors found",
                   why, "%s", ex_print(e));
         *out = ex_clone(e);
         return true;

@@ -39,7 +39,8 @@ bool rr_collect(SvCtx *c, const Expr *L, const Expr *R, Expr **out)
     const char *v = c->var;
     Poly nl, dl, nr, dr, PL, PR, A, B, wl, ol, wr, orr, t;
     if (!sv_frac_form(L, &nl, &dl) || !sv_frac_form(R, &nr, &dr))
-        return sv_fail(c, sv_fmt("Can't make %s the subject of this formula", v));
+        return sv_fail(c, sv_fmt("Can't make %s the subject: %s appears more than once and at least once inside "
+                                 "a root, power or function, so the %s terms can't be collected together", v, v, v));
     if (poly_equal(&dl, &dr)) { dl = dr = poly_const(rat_int(1)); }
     Rat k;
     bool dens = !(poly_is_const(&dl, &k) && rat_is_one(k)) || !(poly_is_const(&dr, &k) && rat_is_one(k));
@@ -57,7 +58,9 @@ bool rr_collect(SvCtx *c, const Expr *L, const Expr *R, Expr **out)
     if (!poly_sub(&PL, &PR, &Q)) return sv_fail(c, "The numbers are too large");
     int dq = poly_degree(&Q, v);
     if (dq == 2) return rr_quadratic(c, &Q, out);
-    if (dq > 2) return sv_fail(c, sv_fmt("Can't make %s the subject of this formula", v));
+    if (dq > 2)
+        return sv_fail(c, sv_fmt("Can't make %s the subject: %s appears to the power %d and to a lower power too, "
+                                 "and no rearranging step can undo both at once", v, v, dq));
     if (!split(&PL, v, &wl, &ol) || !split(&PR, v, &wr, &orr) || !poly_sub(&wl, &wr, &t) || !poly_sub(&orr, &ol, &B))
         return sv_fail(c, "The numbers are too large");
     if (!poly_coeff(&t, v, 1, &A)) return sv_fail(c, "The numbers are too large");

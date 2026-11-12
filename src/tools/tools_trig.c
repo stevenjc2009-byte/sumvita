@@ -7,9 +7,20 @@ static double deg(double r) { return r * 180.0 / PI_D; }
 
 enum { HYP = 0, OPP, ADJ };
 
-static bool angle_ok(CalcResult *o, double a)
+/* a triangle angle: strictly between 0° and 180°; label names it in the message */
+static bool angle_ok(CalcResult *o, const char *label, double a)
 {
-    if (a <= 0 || a >= 180) { tu_fail(o, "An angle in a triangle is between 0° and 180°"); return false; }
+    if (a <= 0 || a >= 180) { tu_fail(o, "%s is %s°: an angle in a triangle is between 0° and 180°", label, tu_w(a)); return false; }
+    return true;
+}
+
+/* two angles of one triangle must leave something for the third */
+static bool angles_fit(CalcResult *o, double A, double B)
+{
+    if (A + B >= 180 - 1e-9) {
+        tu_fail(o, "Angles A and B add up to %s°: that is %s 180°, so there is no triangle", tu_w(A + B), A + B > 180 + 1e-9 ? "more than" : "exactly");
+        return false;
+    }
     return true;
 }
 
@@ -71,7 +82,7 @@ RUN(run_sine_side)
     tu_begin(o);
     double A, a, B;
     if (!tu_num(o, "Angle A (°)", v[0], &A) || !tu_num(o, "Side a (opposite A)", v[1], &a) || !tu_num(o, "Angle B (°)", v[2], &B)) return;
-    if (!angle_ok(o, A) || !angle_ok(o, B) || a <= 0) return;
+    if (!tu_pos(o, "Side a", a) || !angle_ok(o, "Angle A", A) || !angle_ok(o, "Angle B", B) || !angles_fit(o, A, B)) return;
     double r = a * sin(rad(B)) / sin(rad(A));
     ST("Sine rule", "Each side over the sine of its opposite angle", "a/sin A=b/sin B");
     ST("Substitute", "", "%s/sin(%s°)=b/sin(%s°)", tu_w(a), tu_w(A), tu_w(B));
@@ -86,7 +97,7 @@ RUN(run_sine_angle)
     tu_begin(o);
     double a, A, b;
     if (!tu_num(o, "Side a", v[0], &a) || !tu_num(o, "Angle A (°) opposite a", v[1], &A) || !tu_num(o, "Side b", v[2], &b)) return;
-    if (!angle_ok(o, A) || a <= 0 || b <= 0) { tu_fail(o, "Check the sides and angle"); return; }
+    if (!tu_pos(o, "Side a", a) || !tu_pos(o, "Side b", b) || !angle_ok(o, "Angle A", A)) return;
     double q = b * sin(rad(A)) / a;
     ST("Sine rule (angles on top)", "", "sin A/a=sin B/b");
     ST("Substitute", "", "sin(%s°)/%s=sin B/%s", tu_w(A), tu_w(a), tu_w(b));
@@ -94,6 +105,7 @@ RUN(run_sine_angle)
     if (q > 1) { tu_fail(o, "No such triangle: sin B would be more than 1"); return; }
     double B = deg(asin(q));
     ST("Inverse sine", "", "B=sin^-1(%s)=%s°", tu_w(q), tu_w(B));
+    if (!angles_fit(o, A, B)) return;
     const char *alt = "";
     if (A + (180 - B) < 180 - 1e-9 && fabs(B - 90) > 1e-9) {
         alt = asprintf_a("\"or obtuse\" %s°", tu_f(180 - B, s, 3, 1));
@@ -108,7 +120,7 @@ RUN(run_cosine_side)
     tu_begin(o);
     double a, b, C;
     if (!tu_num(o, "Side a", v[0], &a) || !tu_num(o, "Side b", v[1], &b) || !tu_num(o, "Angle C (°) between them", v[2], &C)) return;
-    if (!angle_ok(o, C) || a <= 0 || b <= 0) { tu_fail(o, "Check the sides and angle"); return; }
+    if (!tu_pos(o, "Side a", a) || !tu_pos(o, "Side b", b) || !angle_ok(o, "Angle C", C)) return;
     double c2 = a * a + b * b - 2 * a * b * cos(rad(C)), r = sqrt(c2);
     ST("Cosine rule", "Two sides and the angle between them", "c^2=a^2+b^2-2ab cos C");
     ST("Substitute", "", "c^2=%s^2+%s^2-2×%s×%s×cos(%s°)", tu_w(a), tu_w(b), tu_w(a), tu_w(b), tu_w(C));
@@ -138,7 +150,7 @@ RUN(run_area_sin)
     tu_begin(o);
     double a, b, C;
     if (!tu_num(o, "Side a", v[0], &a) || !tu_num(o, "Side b", v[1], &b) || !tu_num(o, "Angle C (°) between them", v[2], &C)) return;
-    if (!angle_ok(o, C) || a <= 0 || b <= 0) { tu_fail(o, "Check the sides and angle"); return; }
+    if (!tu_pos(o, "Side a", a) || !tu_pos(o, "Side b", b) || !angle_ok(o, "Angle C", C)) return;
     double r = 0.5 * a * b * sin(rad(C));
     ST("Area of a triangle", "Two sides and the angle between them", "A=1/2×a×b×sin C");
     ST("Substitute", "", "A=1/2×%s×%s×sin(%s°)=%s", tu_w(a), tu_w(b), tu_w(C), tu_w(r));
@@ -153,6 +165,11 @@ RUN(run_exact)
     static const char *cs[5] = { "1", "√(3)/2", "√(2)/2", "1/2", "0" };
     static const char *tn[5] = { "0", "√(3)/3", "1", "√(3)", "\"undefined\"" };
     int i = tu_choice("0|30|45|60|90", v[0]);
+    if (i == 0 && (!v[0] || strcmp(v[0], "0") != 0)) {
+        if (tu_blank(v[0])) tu_fail(o, "Choose an angle: 0°, 30°, 45°, 60° or 90°");
+        else tu_fail(o, "%s° is not in the exact values table: the angles are 0°, 30°, 45°, 60° and 90°", v[0]);
+        return;
+    }
     double ang = i == 0 ? 0 : i == 1 ? 30 : i == 2 ? 45 : i == 3 ? 60 : 90;
     ST("Exact values table", "Learn these: 0°, 30°, 45°, 60°, 90°", "%s°", tu_w(ang));
     ST("sin", "", "sin %s°=%s", tu_w(ang), sn[i]);

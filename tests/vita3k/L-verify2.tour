@@ -1,0 +1,30 @@
+# L-verify2.tour - second half of the L checks (see L-verify.tour).
+log L-verify2 start
+hist_clear
+set exact 1
+mode alg
+input
+# x + 2, Expand -> toast: nothing to multiply out (from col 1: LEFT x3 = Expand)
+key 0
+key 27
+key 31
+press LEFT 3
+shot v2_on_expand
+press CONFIRM
+shot v2_nothing_to_expand
+osk X = -2 and x = -3
+wait 10
+shot v2_osk_roots
+key 41
+shot v2_osk_roots_eq
+press LEFT 6
+press LEFT
+press CONFIRM
+shot v2_osk_roots_expand
+osk 2 x ^ 2 + 3
+shot v2_osk_power
+mode calc
+osk 20 % of 300
+key 24
+shot v2_osk_pct
+end

@@ -1,0 +1,74 @@
+# L-verify.tour - proves the Expand / Ans / OSK-text fixes through the real input path.
+# Alg keypad (6x7): x0 ... ,11 / ... (16 )17 / 7 18 ... AC23 / 4 24 ... +27 -28 DEL29 /
+#  1 30 2 31 3 32 ... / 0 36 .37 pi38 Ans39 k40 =41
+log L-verify start
+hist_clear
+set exact 1
+mode alg
+input
+# keypad hint bar names the way to the action row
+key 23
+shot v_hints_keypad
+# empty input, Expand -> toast says what to type
+press LEFT 6
+press LEFT
+press CONFIRM
+shot v_empty_expand
+# x + 2, Expand -> toast: nothing to multiply out
+key 0
+key 27
+key 31
+press LEFT 6
+press LEFT
+press CONFIRM
+shot v_nothing_to_expand
+# (x+2)(x+3) and "=" -> toast: pick an action
+key 23
+key 16
+key 0
+key 27
+key 31
+key 17
+key 16
+key 0
+key 27
+key 32
+key 17
+key 41
+shot v_eq_same
+# Expand, then the Ans key -> the expression, not 0
+press LEFT 6
+press LEFT
+press CONFIRM
+shot v_expanded
+key 39
+shot v_ans_key
+press LEFT 4
+press LEFT
+press CONFIRM
+shot v_ans_expand
+# operator after an algebra answer: (x^2+5x+6) + 1
+key 27
+key 30
+shot v_op_after_answer
+# system keyboard text, as accepted from the IME
+osk ( x + 2 )( x + 3 )
+shot v_osk_brackets
+press LEFT 2
+press CONFIRM
+shot v_osk_brackets_expand
+osk X = -2 and x = -3
+shot v_osk_roots
+key 41
+shot v_osk_roots_eq
+press LEFT 6
+press LEFT
+press CONFIRM
+shot v_osk_roots_expand
+osk 2 x ^ 2 + 3
+shot v_osk_power
+mode calc
+osk 20 % of 300
+key 24
+shot v_osk_pct
+end

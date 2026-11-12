@@ -52,7 +52,10 @@ bool fac_quad(FCtx *c, int i, FSplit *s)
     if (D < 0 || !i64_isqrt_exact(D, &sq)) {
         if (simple) {
             c->proven = true;
-            c->why = asprintf_a("b^2-4ac = %s is not a square number, so there are no rational factors.", ri(D));
+            c->why = A == 1 ? asprintf_a("No two whole numbers or fractions multiply to give %s and add to give %s, "
+                                         "so it does not factorise.", ri(C), ri(B))
+                            : asprintf_a("No two whole numbers or fractions multiply to give a×c = %s and add to give %s, "
+                                         "so it does not factorise.", ri(AC), ri(B));
         }
         return false;
     }

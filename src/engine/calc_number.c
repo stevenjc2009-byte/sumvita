@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "arena.h"
+#include "calc_more.h"
 #include "calc_util.h"
 
 #define TIMES "\xC3\x97"
@@ -103,7 +104,15 @@ const char *cu_exact_dec(Rat r)
 void calc_prime_factors(const Expr *t, CalcResult *out)
 {
     Rat r;
-    if (!cu_rational(t, &r) || r.d != 1) { cu_fail(out, "Prime factors need a whole number"); return; }
+    if (!cu_rational(t, &r) || r.d != 1) {
+        double v;                       /* a whole number past int64 is kept as a decimal value */
+        EvalEnv env = {.degrees = true};
+        if (ex_eval(t, &env, &v) && isfinite(v) && fabs(v) > 1e12 && v == floor(v))
+            cu_fail(out, "Too big to factorise (largest is 10^12)");
+        else
+            cu_fail(out, "Prime factors need a whole number");
+        return;
+    }
     int64_t n = r.n;
     if (n < 2) { cu_fail(out, "Prime factors need a whole number 2 or more"); return; }
     if (n > 1000000000000LL) { cu_fail(out, "Too big to factorise (largest is 10^12)"); return; }
@@ -140,8 +149,42 @@ void calc_prime_factors(const Expr *t, CalcResult *out)
 
 /* ---- standard form ---- */
 
+/* "6.02" shifted n places -> "602000000000000000000000"; NULL if too long to show */
+const char *cu_shift_point(const char *m, int n)
+{
+    if (n > 38 || n < -38) return NULL;
+    bool neg = m[0] == '-';
+    if (neg) m++;
+    char dig[48], buf[96];
+    int nd = 0, ip = -1, o = 0;
+    for (const char *p = m; *p && nd < 40; p++) {
+        if (*p == '.') ip = nd;
+        else dig[nd++] = *p;
+    }
+    if (ip < 0) ip = nd;
+    int pos = ip + n;                   /* digits before the point */
+    if (neg) buf[o++] = '-';
+    if (pos <= 0) {
+        buf[o++] = '0';
+        buf[o++] = '.';
+        for (int i = 0; i < -pos; i++) buf[o++] = '0';
+        for (int i = 0; i < nd; i++) buf[o++] = dig[i];
+    } else {
+        for (int i = 0; i < pos; i++) buf[o++] = i < nd ? dig[i] : '0';
+        if (pos < nd) {
+            buf[o++] = '.';
+            for (int i = pos; i < nd; i++) buf[o++] = dig[i];
+        }
+    }
+    buf[o] = 0;
+    strip_zeros(buf);
+    char *s = buf + (neg ? 1 : 0);      /* "03" -> "3" */
+    while (s[0] == '0' && s[1] && s[1] != '.') memmove(s, s + 1, strlen(s));
+    return strlen(buf) > 44 ? NULL : astrdup(buf);
+}
+
 /* a×10^n with a an E_NUM and n an integer; also 10^n alone */
-static bool std_parts(const Expr *e, Rat *a, int *n)
+bool cu_std_parts(const Expr *e, Rat *a, int *n)
 {
     const Expr *p = e;
     *a = rat_int(1);
@@ -193,43 +236,39 @@ static const char *to_std(double v, const Rat *exact, const CalcSettings *s, int
     return sci(buf, n);
 }
 
+/* Already a×10^n with 1 <= |a| < 10: the answer stays in standard form; the
+ * ordinary number (when it is short enough to write out) is the other form. */
+static void std_already(const Expr *t, Rat a, int n, CalcResult *out)
+{
+    const char *m = cu_exact_dec(a);
+    if (!m) m = cu_rat_str(a);
+    const char *ans = sci(m, n), *typed = ex_print(t);
+    steps_add(&out->steps, "Already in standard form", "The first number is from 1 to 10, times a power of 10",
+              strcmp(typed, ans) ? "%s=%s" : NULL, typed, ans);
+    const char *d = cu_shift_point(m, n);
+    if (d)
+        steps_add(&out->steps, asprintf_a("Move the decimal point %d place%s %s", abs(n), abs(n) == 1 ? "" : "s",
+                                          n >= 0 ? "right" : "left"),
+                  n >= 0 ? "As an ordinary number: a positive power makes it bigger"
+                         : "As an ordinary number: a negative power makes it smaller",
+                  "%s=%s", ans, d);
+    out->answer = ans;
+    out->answer_alt = d ? d : "";
+    out->value = rat_to_double(a) * pow(10, n);
+    out->has_value = true;
+}
+
 void calc_std_form(const Expr *t, const CalcSettings *s, CalcResult *out)
 {
     Rat a, val;
     int n;
-    if (std_parts(t, &a, &n) && std_ok(a)) {           /* standard form -> ordinary number */
-        const char *d = NULL;
-        Rat p;
-        if (rat_pow_int(rat_int(10), n, &p) && rat_mul(a, p, &val)) d = cu_exact_dec(val);
-        if (!d) { cu_fail(out, "Too long to write out in full"); return; }
-        steps_add(&out->steps, asprintf_a("Move the decimal point %d place%s %s", abs(n), abs(n) == 1 ? "" : "s",
-                                          n >= 0 ? "right" : "left"),
-                  n >= 0 ? "A positive power makes the number bigger" : "A negative power makes the number smaller",
-                  "%s=%s", ex_print(t), d);
-        out->answer = d;
-        out->value = rat_to_double(val);
-        out->has_value = true;
-        return;
-    }
+    if (cu_std_parts(t, &a, &n) && std_ok(a)) { std_already(t, a, n, out); return; }
     if (!cu_domain_ok(t, s->degrees, out)) return;
     CVal v;
     if (!cu_value(t, s->degrees, &v)) { cu_fail(out, "Maths error"); return; }
     if (v.v == 0) { out->answer = "0"; out->has_value = true; return; }
     bool exact = v.exact && cu_rational(v.e, &val);
-    Rat a2;
-    int n2;
-    if ((t->kind == E_MUL || t->kind == E_DIV) && t->nkids == 2 && std_parts(t->kids[0], &a, &n) &&
-        std_parts(t->kids[1], &a2, &n2)) {
-        bool mul = t->kind == E_MUL;
-        Rat m;
-        if (mul ? rat_mul(a, a2, &m) : rat_div(a, a2, &m)) {
-            steps_add(&out->steps, mul ? "Multiply the numbers" : "Divide the numbers", "", "%s%s%s=%s",
-                      ex_print(ex_num(a)), mul ? TIMES : "\xC3\xB7", ex_print(ex_num(a2)), ex_print(cu_rat_disp(m)));
-            steps_add(&out->steps, mul ? "Add the powers of 10" : "Subtract the powers of 10",
-                      mul ? "10^a\xC3\x97" "10^b = 10^(a+b)" : "10^a\xC3\xB7" "10^b = 10^(a-b)", "10^%d%s10^%d=10^%d", n,
-                      mul ? TIMES : "\xC3\xB7", n2, mul ? n + n2 : n - n2);
-        }
-    }
+    cu_std_muldiv_steps(t, &out->steps, &a, &n);
     int ne;
     const char *ans = to_std(v.v, exact ? &val : NULL, s, &ne);
     const char *plain = exact && cu_exact_dec(val) ? cu_exact_dec(val) : cu_fmt_dec(v.v, s, NULL);

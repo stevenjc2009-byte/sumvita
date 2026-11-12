@@ -52,6 +52,8 @@ void tu_pair(CalcResult *o, const CalcSettings *s, const char *decimal, const ch
 
 /* ---- field parsing (all return false and set o->error on failure) ---- */
 bool tu_blank(const char *txt);
+bool tu_nonneg(CalcResult *o, const char *label, double x);   /* fails "<label> cannot be negative" */
+bool tu_pos(CalcResult *o, const char *label, double x);      /* fails "<label> must be positive" */
 bool tu_num(CalcResult *o, const char *label, const char *txt, double *x);
 bool tu_rat(CalcResult *o, const char *label, const char *txt, Rat *r);
 bool tu_list(CalcResult *o, const char *label, const char *txt, double *a, int max, int *n);
@@ -71,6 +73,11 @@ const char *tu_w(double x);                         /* working value: 6 s.f. tri
  * def_dp < 0 means the tool defaults to def_sf. */
 const char *tu_f(double x, const CalcSettings *s, int def_sf, int def_dp);
 const char *tu_rs(Rat r);                           /* "7/2" */
+const char *tu_rp(Rat r);                           /* "7/2" but "(7/2)" when a fraction or negative: safe beside × ÷ */
+const char *tu_surd(int64_t n);                     /* sqrt(n) simplified: "4√5"; NULL if n is a perfect square or n <= 0 */
+/* answer for a value that is exactly r: a terminating decimal alone, otherwise the exact fraction
+ * with the rounded decimal (tu_pair order); def_sf/def_dp as tu_f. Sets value. */
+void tu_rat_ans(CalcResult *o, const CalcSettings *s, Rat r, int def_sf, int def_dp);
 const char *tu_u(const char *num, const char *unit);        /* 12.3 "cm" */
 const char *tu_unit_pow(const char *unit, int pow);         /* cm, cm², cm³ */
 const char *tu_pi(double coef);                     /* "25π" / "(250/3)π", NULL if not rational */

@@ -60,7 +60,7 @@ int main(void)
     R("-(3)", "-(3)");
     R("2^3^2", "2^3^2");
     R("(2^3)^2", "(2^3)^2");
-    R("2/3x", "2/3x");
+    R("2/3x", "(2/3)x");     /* F1: a fraction before a letter is bracketed, never 2/3x */
     R("1/(2x)", "1/(2x)");
     R("a/b/c", "a/b/c");
     R("a/(b/c)", "a/(b/c)");
@@ -137,8 +137,36 @@ int main(void)
     CHECK_STR(PE(ex_mul2(Q(1, 2), V("x"))), "x/2");
     CHECK_STR(PE(ex_mul2(Q(-1, 2), V("x"))), "-x/2");
     CHECK_STR(PE(M3(Q(1, 2), V("x"), V("y"))), "xy/2");
-    CHECK_STR(PE(ex_mul2(Q(2, 3), V("x"))), "2/3x");
-    CHECK_STR(PE(ex_mul2(Q(-2, 3), V("x"))), "-2/3x");
+    CHECK_STR(PE(ex_mul2(Q(2, 3), V("x"))), "2x/3");
+    CHECK_STR(PE(ex_mul2(Q(-2, 3), V("x"))), "-2x/3");
+    /* F1 items 7, 11: a rational coefficient goes over the whole product, and the text parses back */
+    {
+        Expr *pi = ex_const(C_PI);
+        CHECK_STR(PE(ex_mul2(Q(5, 6), V("x"))), "5x/6");
+        CHECK_STR(PE(ex_mul2(Q(4, 3), pi)), "4π/3");
+        CHECK_STR(PE(M3(Q(4, 3), ex_const(C_PI), N(27))), "4π×" "27/3");
+        CHECK_STR(PE(ex_mul2(Q(2, 3), ex_add2(V("x"), N(1)))), "2(x+1)/3");
+        CHECK_STR(PE(A3(ex_pow2(V("x"), N(2)), ex_mul2(Q(5, 6), V("x")), Q(1, 6))), "x^2+5x/6+1/6");
+        CHECK_STR(PE(A3(ex_pow2(V("x"), N(2)), ex_mul2(Q(-5, 6), V("x")), Q(1, 6))), "x^2-5x/6+1/6");
+        const Expr *cases[] = {
+            ex_mul2(Q(5, 6), V("x")), ex_mul2(Q(-2, 3), V("x")), ex_mul2(Q(4, 3), ex_const(C_PI)),
+            M3(Q(4, 3), ex_const(C_PI), N(27)), ex_mul2(Q(2, 3), ex_add2(V("x"), N(1))),
+            M3(Q(3, 4), V("x"), ex_pow2(V("y"), N(2))),
+            A3(ex_pow2(V("x"), N(2)), ex_mul2(Q(5, 6), V("x")), Q(1, 6)),
+        };
+        for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+            char err[96];
+            int pos;
+            const char *txt = ex_print(cases[i]);
+            Expr *back = ex_parse(txt, err, sizeof err, &pos);
+            CHECK(back != NULL, "F1 print round trip: \"%s\" does not parse: %s", txt, err);
+            if (!back) continue;
+            Expr *sa = ex_simplify(ex_subst(ex_subst(cases[i], "x", N(7)), "y", N(5)));
+            Expr *sb = ex_simplify(ex_subst(ex_subst(back, "x", N(7)), "y", N(5)));
+            bool ok = ex_equal(sa, sb);
+            CHECK(ok, "F1 print round trip: \"%s\" parses to a different value", txt);
+        }
+    }
     CHECK_STR(PE(ex_mul2(Q(1, 2), ex_add2(V("x"), N(1)))), "(x+1)/2");
     CHECK_STR(PE(ex_add2(V("a"), ex_mul2(Q(-1, 2), V("x")))), "a-x/2");
     CHECK_STR(PE(Q(2, 3)), "2/3");

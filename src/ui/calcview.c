@@ -44,6 +44,7 @@ void cv_run(int mode, CalcAction a, const char *subject)
 			res_free(&s->cur);
 			s->has_cur = false;
 		}
+		cv_empty_hint(mode, a);
 		return;
 	}
 	CalcSettings cs;
@@ -51,6 +52,7 @@ void cv_run(int mode, CalcAction a, const char *subject)
 	if (subject)
 		snprintf(cs.target_var, sizeof cs.target_var, "%s", subject);
 	res_run(&s->cur, a, input, &cs);
+	cv_same_hint(mode, a, &s->cur, input);
 	s->has_cur = true;
 	s->show_alt = false;
 	s->fresh = true;
@@ -101,10 +103,8 @@ static void open_osk(int mode)
 	CalcState *s = &g_cs[mode];
 	char cur[512], out[512];
 	ed_serialize(&s->ed, cur, (int)sizeof cur);
-	if (osk_prompt("Type maths (e.g. 2x^2+3x-5=0)", cur, OSK_TEXT, out, sizeof out) == 1) {
-		ed_load(&s->ed, out);
-		s->fresh = false;
-	}
+	if (osk_prompt("Type maths (e.g. 2x^2+3x-5=0)", cur, OSK_TEXT, out, sizeof out) == 1)
+		cv_osk_accept(mode, out);
 }
 
 void calc_screen_key(int mode, int idx)
@@ -121,9 +121,13 @@ void calc_screen_key(int mode, int idx)
 		if (op || starts_new(k)) {
 			ed_clear(&s->ed);
 			if (op && s->has_cur && s->cur.ok)
-				ed_insert_text(&s->ed, "Ans");
+				cv_insert_ans(mode);
 		}
 		s->fresh = false;
+	}
+	if (k->act == KA_TEXT && !strcmp(k->ins, "Ans")) {
+		cv_insert_ans(mode);
+		return;
 	}
 	int cmd = key_apply(k, &s->ed);
 	if (k->act == KA_CMD && cmd == KC_NONE)
@@ -334,7 +338,7 @@ void calc_screen_update(int mode, const input_t *in)
 
 	static const Hint hk[] = { { GLYPH_CONFIRM, "Press" }, { GLYPH_BACK, "Delete" },
 		{ GLYPH_SQUARE, "S\xE2\x87\x94" "D" }, { GLYPH_TRIANGLE, "Steps" }, { GLYPH_START, "=" },
-		{ GLYPH_LR, "Mode" }, { GLYPH_SELECT, "Settings" } };
+		{ GLYPH_DPAD, "\xE2\x97\x80 edge: Actions" }, { GLYPH_LR, "Mode" }, { GLYPH_SELECT, "Settings" } };
 	static const Hint he[] = { { GLYPH_DPAD, "Move cursor" }, { GLYPH_CONFIRM, "=" }, { GLYPH_BACK, "Delete" },
 		{ GLYPH_TRIANGLE, "Steps" }, { GLYPH_LR, "Mode" } };
 	static const Hint hh[] = { { GLYPH_DPAD, "Choose" }, { GLYPH_CONFIRM, "Edit this" },
@@ -345,6 +349,6 @@ void calc_screen_update(int mode, const input_t *in)
 	case FOC_EDITOR: app_hints(he, 5); break;
 	case FOC_HISTORY: app_hints(hh, 4); break;
 	case FOC_ACTIONS: app_hints(ha, 4); break;
-	default: app_hints(hk, 7); break;
+	default: app_hints(hk, 8); break;
 	}
 }

@@ -66,5 +66,9 @@ int cv_hist_entry_h(int i);
 int cv_hist_hit(int mode, int ty);
 void cv_run(int mode, CalcAction a, const char *subject);
 void cv_do_action(int mode, int i);
+void cv_empty_hint(int mode, CalcAction a);
+void cv_same_hint(int mode, CalcAction a, const Res *r, const char *input);
+void cv_insert_ans(int mode);
+void cv_osk_accept(int mode, const char *text);
 
 #endif

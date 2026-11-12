@@ -4,7 +4,7 @@ A calculator for the PS Vita that shows its working. Sumvita has normal, scienti
 and graphing calculators, an algebra mode, and 92 GCSE question tools. Every answer can
 open a step-by-step page that sets out the working the way a maths teacher would.
 
-Title ID `SUMV00001` · version 1.0.0 · GPL-3.0
+Title ID `SUMV00001` · version 1.1.0 · GPL-3.0
 
 ![Sumvita LiveArea art](docs/art/preview.png)
 
@@ -41,6 +41,9 @@ about 9.2 × 10^18; anything larger, such as 2^100 or 30!, is given in standard 
   - simultaneous equations
   - inequalities, including double inequalities such as −3 < 2x+1 ≤ 7
   - equations with fractions
+- **Solutions back to an equation**: type `x = -2 and x = -3` and press = to get
+  x² + 5x + 6 = 0, with the working.
+- **Simplify** with working, e.g. 3(x+1) − 3x → 3 and (x+1)/2 + (x−1)/3 → (5x+1)/6.
 - **Complete the square**, **rearrange formulae** and **simplify algebraic fractions**.
 
 **Graphing.** Plot up to six functions. You can pan, zoom (or pinch) and trace along a
@@ -72,13 +75,13 @@ The touch screen works everywhere: tap keys, drag to scroll, pinch to zoom the g
 
 ## Install
 
-<img src="docs/install-qr.png" alt="QR code for the Sumvita.vpk 1.0.0 download" width="200" align="right">
+<img src="docs/install-qr.png" alt="QR code for the Sumvita.vpk 1.1.0 download" width="200" align="right">
 
 Scan the code with the Vita's own browser (**Browser → ☰ → QR code reader**). It
-downloads `Sumvita.vpk` for 1.0.0 straight to the console, with no PC or USB needed.
+downloads `Sumvita.vpk` for 1.1.0 straight to the console, with no PC or USB needed.
 Then install the downloaded file with VitaShell.
 
-`https://github.com/stevenjc2009-byte/sumvita/releases/download/v1.0.0/Sumvita.vpk`
+`https://github.com/stevenjc2009-byte/sumvita/releases/download/v1.1.0/Sumvita.vpk`
 
 Or do it by hand:
 
@@ -107,7 +110,7 @@ To regenerate the art and the QR code:
 
 ```sh
 py -3 tools/make_sce_sys.py      # icon, LiveArea background, startup image (8-bit palette PNGs)
-py -3 tools/make_qr.py v1.0.0    # docs/install-qr.png
+py -3 tools/make_qr.py v1.1.0    # docs/install-qr.png
 ```
 
 ## Licence

@@ -304,6 +304,31 @@ static const Sym SYMS[] = {
 };
 #define NSYM ((int)(sizeof SYMS / sizeof SYMS[0]))
 
+/* Bare "and" / "or" as a list separator, "x=-2 and x=-3", "x=-2andx=-3" (docs/SYNTAX.md):
+ * no letter just before it, and the text on BOTH sides, up to the next separator (',' or
+ * such a word), has a relation sign. Else letters stay letters: "and", "x=and", "2a+n". */
+static int sep_word_at(const char *s, int i)
+{
+    if (i > 0 && isalph(s[i - 1])) return 0;
+    return strncmp(s + i, "and", 3) == 0 ? 3 : (strncmp(s + i, "or", 2) == 0 ? 2 : 0);
+}
+
+static bool rel_at(const unsigned char *s)
+{
+    return *s == '=' || *s == '<' || *s == '>' ||
+           (s[0] == 0xE2 && s[1] == 0x89 && (s[2] == 0xA4 || s[2] == 0xA5 || s[2] == 0xA0));
+}
+
+static int lex_sep_word(const char *s, int i)
+{
+    int l = sep_word_at(s, i), before = 0, after = 0;
+    for (int j = i - 1; l && j >= 0 && !before && s[j] != ',' && !sep_word_at(s, j); j--)
+        before = rel_at((const unsigned char *)s + j);
+    for (int j = i + l; l && s[j] && !after && s[j] != ',' && !sep_word_at(s, j); j++)
+        after = rel_at((const unsigned char *)s + j);
+    return before && after ? l : 0;
+}
+
 static int utf8_len(unsigned char c)
 {
     if (c < 0x80) return 1;
@@ -326,6 +351,8 @@ bool lex_all(const char *src, Tok **out, int *ntok, char *err, int errcap, int *
             continue;
         }
         if (isalph(*p)) {
+            int sl = lex_sep_word(src, pos);           /* "x=1 and x=2": a comma */
+            if (sl) { push(&L, TK_COMMA, pos, sl); p += sl; continue; }
             if (!lex_word(&L, &p)) return false;
             continue;
         }

@@ -7,7 +7,7 @@ RUN(run_pct_of)
 {
     tu_begin(o);
     double p, a;
-    if (!tu_num(o, "Percentage", v[0], &p) || !tu_num(o, "Amount", v[1], &a)) return;
+    if (!tu_num(o, "Percentage", v[0], &p) || !tu_num(o, "Amount", v[1], &a) || !tu_nonneg(o, "Amount", a)) return;
     double r = p / 100.0 * a;
     ST("Write the percentage as a fraction", "Per cent means out of 100", "%s%%=%s/100", tu_w(p), tu_w(p));
     ST("Multiply by the amount", "", "%s/100×%s", tu_w(p), tu_w(a));
@@ -33,7 +33,8 @@ RUN(run_pct_reverse)
 {
     tu_begin(o);
     double after, p;
-    if (!tu_num(o, "Price after the change", v[0], &after) || !tu_num(o, "Percentage change", v[1], &p)) return;
+    if (!tu_num(o, "Price after the change", v[0], &after) || !tu_num(o, "Percentage change", v[1], &p) ||
+        !tu_nonneg(o, "Price after the change", after)) return;
     bool up = tu_choice("increase|decrease", v[2]) == 0;
     double m = up ? 1 + p / 100 : 1 - p / 100;
     if (m <= 0) { tu_fail(o, "Multiplier must be positive"); return; }
@@ -49,7 +50,7 @@ RUN(run_pct_adjust)
 {
     tu_begin(o);
     double a, p;
-    if (!tu_num(o, "Amount", v[0], &a) || !tu_num(o, "Percentage", v[1], &p)) return;
+    if (!tu_num(o, "Amount", v[0], &a) || !tu_num(o, "Percentage", v[1], &p) || !tu_nonneg(o, "Amount", a)) return;
     bool up = tu_choice("increase|decrease", v[2]) == 0;
     double m = up ? 1 + p / 100 : 1 - p / 100;
     double r = a * m;
@@ -66,10 +67,13 @@ RUN(run_compound)
     tu_begin(o);
     double pr, rate, yrs;
     if (!tu_num(o, "Starting amount", v[0], &pr) || !tu_num(o, "Rate % per year", v[1], &rate) ||
-        !tu_num(o, "Years", v[2], &yrs)) return;
+        !tu_num(o, "Years", v[2], &yrs) || !tu_nonneg(o, "Starting amount", pr) || !tu_nonneg(o, "Years", yrs)) return;
     bool up = tu_choice("growth|decay", v[3]) == 0;
     double m = up ? 1 + rate / 100 : 1 - rate / 100;
-    if (m <= 0 || yrs < 0) { tu_fail(o, "Check the rate and years"); return; }
+    if (m <= 0) {
+        tu_fail(o, up ? "Rate %s%% is too low: growth needs a rate above -100%%" : "Rate %s%% is too high: decay needs a rate below 100%%", tu_w(rate));
+        return;
+    }
     double a = pr * pow(m, yrs);
     ST("Formula", up ? "Compound interest / growth" : "Depreciation / decay", "A=P×(1%s r/100)^n", up ? "+" : "-");
     ST("Find the multiplier", "", "1%s%s/100=%s", up ? "+" : "-", tu_w(rate), tu_w(m));
@@ -85,7 +89,7 @@ RUN(run_simple_int)
     tu_begin(o);
     double pr, rate, yrs;
     if (!tu_num(o, "Amount", v[0], &pr) || !tu_num(o, "Rate % per year", v[1], &rate) ||
-        !tu_num(o, "Years", v[2], &yrs)) return;
+        !tu_num(o, "Years", v[2], &yrs) || !tu_nonneg(o, "Amount", pr) || !tu_nonneg(o, "Years", yrs)) return;
     double i = pr * rate * yrs / 100.0;
     ST("Formula", "Simple interest is the same every year", "I=(P×R×T)/100");
     ST("Substitute", "", "I=(%s×%s×%s)/100", tu_w(pr), tu_w(rate), tu_w(yrs));
@@ -99,7 +103,7 @@ RUN(run_vat)
 {
     tu_begin(o);
     double pr, rate;
-    if (!tu_num(o, "Price", v[0], &pr) || !tu_num(o, "VAT rate %", v[1], &rate)) return;
+    if (!tu_num(o, "Price", v[0], &pr) || !tu_num(o, "VAT rate %", v[1], &rate) || !tu_nonneg(o, "Price", pr)) return;
     double m = 1 + rate / 100;
     if (tu_choice("add|remove", v[2]) == 0) {
         double r = pr * m;
@@ -242,7 +246,8 @@ RUN(run_bounds_calc)
         ST("Upper bound: biggest a, smallest b", "", "%s/%s=%s", tu_w(au), tu_w(bl), tu_w(hi));
         ST("Lower bound: smallest a, biggest b", "", "%s/%s=%s", tu_w(al), tu_w(bu), tu_w(lo)); break;
     }
-    tu_ans(o, asprintf_a("\"Upper bound\"=%s, \"Lower bound\"=%s", tu_f(hi, s, 8, -1), tu_f(lo, s, 8, -1)), "");
+    int bsf = op == 3 ? 5 : 8;   /* a÷b rarely ends: 5 s.f. */
+    tu_ans(o, asprintf_a("\"Upper bound\"=%s, \"Lower bound\"=%s", tu_f(hi, s, bsf, -1), tu_f(lo, s, bsf, -1)), "");
     tu_val(o, hi);
 }
 
@@ -328,12 +333,13 @@ RUN(run_frac_of)
     tu_begin(o);
     Rat f;
     double amt;
-    if (!tu_rat(o, "Fraction", v[0], &f) || !tu_num(o, "Amount", v[1], &amt)) return;
+    if (!tu_rat(o, "Fraction", v[0], &f) || !tu_num(o, "Amount", v[1], &amt) || !tu_nonneg(o, "Amount", amt)) return;
     double part = amt / (double)f.d, r = part * (double)f.n;
     ST("Divide by the denominator", "", "%s÷%lld=%s", tu_w(amt), (long long)f.d, tu_w(part));
     ST("Multiply by the numerator", "", "%s×%lld=%s", tu_w(part), (long long)f.n, tu_w(r));
-    tu_ans(o, tu_f(r, s, 8, -1), "");
-    tu_val(o, r);
+    Rat ra, exact;
+    if (rat_from_double(amt, 1000000, &ra) && rat_mul(f, ra, &exact)) tu_rat_ans(o, s, exact, 3, -1);
+    else { tu_ans(o, tu_f(r, s, 3, -1), ""); tu_val(o, r); }
 }
 
 static const Tool T[] = {

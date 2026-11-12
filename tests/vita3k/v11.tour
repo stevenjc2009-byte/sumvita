@@ -1,0 +1,48 @@
+# v11.tour - v1.1.0 release check: the new features through the real input paths.
+# Alg keypad index 41 is "=".
+log v11 start
+hist_clear
+set exact 1
+mode alg
+# a user's typing on the system keyboard, then =
+osk X= -2 and x= -3
+key 41
+shot r_roots_eq
+steps
+shot r_roots_steps
+close
+# no spaces at all
+osk x=-2andx=-3
+key 41
+shot r_roots_glued
+# simplify with working
+osk 3(x+1)-3x
+key 41
+steps
+shot r_simplify_steps
+close
+# Expand still works on brackets
+osk (x+2)(x+3)
+eval expand
+shot r_expand
+# surds on = now show working
+mode calc
+input 1/(√3-1)
+eval auto
+steps
+shot r_surd_steps
+close
+# standard form stays standard form
+input 6.02×10^23
+eval std
+shot r_stdform
+# GCSE tool: distance gives a simplified surd
+mode gcse
+tool distance
+field 0 1
+field 1 2
+field 2 5
+field 3 10
+run
+shot r_distance
+end

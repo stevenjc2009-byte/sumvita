@@ -74,6 +74,7 @@ bool afr_sum(const Expr *e, Steps *st, Expr **out, char *err, int errcap)
     }
     Expr *Le = nf_expr(L);
     Poly sum = poly_zero(), mp, t, s;
+    int nneg = 0;                       /* terms after the first that are taken away */
     for (int i = 0; i < nk; i++) {
         bool neg;
         if (!nf_div(L, &df[i], &mul[i]) || !nf_poly(&mul[i], &mp) || !poly_mul(&N[i], &mp, &t) || !poly_add(&sum, &t, &s))
@@ -82,11 +83,17 @@ bool afr_sum(const Expr *e, Steps *st, Expr **out, char *err, int errcap)
         Expr *ne = num_times(&N[i], &mul[i], &neg);
         terms[i] = sterm(ne, neg, Le);
         nums[i] = neg ? ex_neg(ne) : ne;
+        nneg += i > 0 && neg;
     }
     steps_add(st, "Use a common denominator", asprintf_a("The lowest common denominator is %s.", ex_print(Le)), "%s",
               ex_print(sum_of(terms, nk)));
     const char *added = ex_print(ex_div2(sum_of(nums, nk), Le));
-    steps_add(st, "Add the numerators", "The bottoms are the same, so add the tops.", "%s", added);
+    if (nneg == 0)
+        steps_add(st, "Add the numerators", "The bottoms are the same, so add the tops.", "%s", added);
+    else if (nneg == nk - 1)
+        steps_add(st, "Subtract the numerators", "The bottoms are the same, so subtract the tops.", "%s", added);
+    else
+        steps_add(st, "Add and subtract the numerators", "The bottoms are the same, so combine the tops.", "%s", added);
     if (poly_is_zero(&sum)) {
         steps_add(st, "Simplify the numerator", "The top collects to 0, so the answer is 0.", "0");
         *out = ex_int(0);

@@ -10,7 +10,7 @@ SIZE    := $(PREFIX)-size
 
 TITLE    := Sumvita
 TITLE_ID := SUMV00001
-APP_VER  := 01.00
+APP_VER  := 01.10
 TARGET   := sumvita
 VPK_NAME := Sumvita.vpk
 BUILD    ?= build

@@ -10,6 +10,7 @@
 
 #include <stdbool.h>
 #include "expr.h"
+#include "steps.h"
 
 /* A number that is exact (Rat) until an operation overflows, then double. */
 typedef struct {
@@ -35,5 +36,10 @@ Expr *simp_pow(Expr *base, Expr *exp);
 
 /* Split a simplified term into numeric coefficient and the rest (NULL if none). */
 Num   term_split(Expr *t, Expr **rest);
+
+/* The Simplify action with GCSE working (simplify_steps.c): expands brackets and collects,
+ * writes sums of fractions over a common denominator, square roots √(4a^2) -> 2a (taking
+ * letters ≥ 0). Returns false, writing nothing, when none of these applies. */
+bool  simp_working(const Expr *t, Steps *st, Expr **out);
 
 #endif

@@ -44,6 +44,15 @@ RUN(run_nth_quad)
     for (int i = 1; i + 2 < n; i++) if (!same(d2[i], d2[0])) { tu_fail(o, "The second differences are not constant: not a quadratic sequence"); return; }
     double a = d2[0] / 2;
     ST("First differences", "", "%s", dl(d1, n - 1));
+    if (same(d2[0], 0)) {   /* no n² part: say so, and give the linear nth term */
+        ST("Second differences", "All 0: so there is no n² term", "%s", dl(d2, n - 2));
+        double c1 = t[0] - d1[0], co1[2] = { d1[0], c1 };
+        const char *nt1 = tu_poly(co1, 1, "n");
+        tu_text(o, "This sequence is linear", asprintf_a("The second difference is 0, so it is a linear sequence (common difference %s), not a quadratic one", tu_w(d1[0])));
+        ST("nth term", "dn + c, with d the common difference and c = first term - d", "%s", nt1);
+        tu_ans(o, nt1, "\"linear: second difference 0\"");
+        return;
+    }
     ST("Second differences", "Constant: so the sequence is quadratic", "%s", dl(d2, n - 2));
     ST("Coefficient of n²", "Half the second difference", "a=%s/2=%s", tu_w(d2[0]), tu_w(a));
     for (int i = 0; i < n; i++) rem[i] = t[i] - a * (double)(i + 1) * (double)(i + 1);

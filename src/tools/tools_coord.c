@@ -1,5 +1,6 @@
 /* GCSE Algebra tools: coordinate geometry (gradient, midpoint, distance, lines). */
 #include "tools_util.h"
+#include "../engine/calc_util.h"
 
 static const char *pt(Rat x, Rat y) { return asprintf_a("(%s, %s)", tu_rs(x), tu_rs(y)); }
 static const char *fr(Rat r) { return rat_is_neg(r) ? asprintf_a("(%s)", tu_rs(r)) : tu_rs(r); }
@@ -49,7 +50,10 @@ RUN(run_midpoint)
     ST("Midpoint formula", "Average the x values and the y values", "((x1+x2)/2, (y1+y2)/2)");
     ST("Substitute", "", "((%s+%s)/2, (%s+%s)/2)", fr(x1), fr(x2), fr(y1), fr(y2));
     ST("Calculate", "", "%s", pt(mx, my));
-    tu_ans(o, pt(mx, my), "");
+    char dx[40], dy[40];
+    rat_to_decimal_str(mx, 6, dx, sizeof dx);
+    rat_to_decimal_str(my, 6, dy, sizeof dy);
+    tu_ans(o, pt(mx, my), (mx.d != 1 || my.d != 1) ? asprintf_a("(%s, %s)", dx, dy) : "");
 }
 
 RUN(run_distance)
@@ -61,10 +65,13 @@ RUN(run_distance)
     ST("Distance formula", "Pythagoras on the change in x and y", "d=√((x2-x1)^2+(y2-y1)^2)");
     ST("Substitute", "", "d=√((%s)^2+(%s)^2)", tu_w(dx), tu_w(dy));
     ST("Add", "", "d=√(%s)=%s", tu_w(d2), tu_w(d));
-    const char *alt = "";
-    int64_t r;
-    if (fabs(d2 - round(d2)) < 1e-9 && d2 > 0 && !i64_isqrt_exact((int64_t)llround(d2), &r)) alt = asprintf_a("√(%lld)", (long long)llround(d2));
-    tu_pair(o, s, tu_f(d, s, 3, -1), *alt ? alt : NULL);
+    const char *alt = NULL;
+    if (fabs(d2 - round(d2)) < 1e-9 && d2 > 0) {
+        int64_t n = (int64_t)llround(d2);
+        alt = tu_surd(n);
+        if (alt) cw_surd_step(n, &o->steps);   /* √80=√(16×5)=4√5 */
+    }
+    tu_pair(o, s, tu_f(d, s, 3, -1), alt);
     tu_val(o, d);
 }
 
