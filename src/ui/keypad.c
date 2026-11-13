@@ -88,10 +88,11 @@ static unsigned int key_fill(int style)
 	}
 }
 
-static void draw_key(const Key *k, int x, int y, int w, int h, bool sel, bool pressed, bool degrees)
+/* Key body: edge, fill, highlight and focus ring. Shapes only, so a whole
+ * keypad's bodies go to the GPU as one shape run. */
+static void draw_key_body(const Key *k, int x, int y, int w, int h, bool sel, bool pressed)
 {
 	unsigned int fill = key_fill(k->style);
-	unsigned int tc = k->style == KST_EQ ? theme_on_accent() : k->style == KST_FN ? (unsigned int)COL_TEXT2 : (unsigned int)COL_TEXT;
 	if (pressed)
 		fill = k->style == KST_EQ ? col_mix(fill, COL_TEXT, 90) : col_mix(fill, theme_accent(), 110);
 	int r = h < 40 ? 7 : 9;
@@ -102,7 +103,12 @@ static void draw_key(const Key *k, int x, int y, int w, int h, bool sel, bool pr
 	draw_rect(x + r, y + dy + 1, w - 2 * r, 1, col_alpha(COL_TEXT, pressed ? 10 : 22));
 	if (sel)
 		draw_rrect_outline(x - 2, y - 2 + dy, w + 4, h + 4 - dy, r + 2, 2, theme_accent());
+}
 
+static void draw_key_label(const Key *k, int x, int y, int w, int h, bool pressed, bool degrees)
+{
+	unsigned int tc = k->style == KST_EQ ? theme_on_accent() : k->style == KST_FN ? (unsigned int)COL_TEXT2 : (unsigned int)COL_TEXT;
+	int dy = pressed ? 1 : 0;
 	int px = h * 46 / 100;
 	if (px > 26) px = 26;
 	if (px < 14) px = 14;
@@ -121,21 +127,32 @@ static void draw_key(const Key *k, int x, int y, int w, int h, bool sel, bool pr
 	if (word)
 		lp = px * 78 / 100;
 	lp = ml_quant(lp);
-	while (font_width_w(FW_MED, lp, label) > w - 8 && lp > 12)
+	int wm = font_width_w(FW_MED, lp, label);
+	while (wm > w - 8 && lp > 12) {
 		lp = ml_quant(lp - 2);
+		wm = font_width_w(FW_MED, lp, label);
+	}
 	fweight_t fw = k->style == KST_NUM ? FW_MED : FW_REG;
 	int base = cy + ml_text_asc(lp) / 2 - 1;
-	int tw = font_width_w(fw, lp, label);
+	int tw = fw == FW_MED ? wm : font_width_w(fw, lp, label);
 	font_draw_base(fw, cx - tw / 2, base, tc, lp, label);
 }
 
 void keypad_draw(const Keyset *ks, int x, int y, int w, int h, int sel, int pressed, bool degrees)
 {
 	int n = ks->cols * ks->rows;
+	/* bodies first, then labels: keys never overlap, so the picture is the same */
+	draw_shapes_begin();
 	for (int i = 0; i < n; i++) {
 		int kx, ky, kw, kh;
 		keypad_rect(ks, x, y, w, h, i, &kx, &ky, &kw, &kh);
-		draw_key(&ks->k[i], kx, ky, kw, kh, i == sel, i == pressed, degrees);
+		draw_key_body(&ks->k[i], kx, ky, kw, kh, i == sel, i == pressed);
+	}
+	draw_shapes_end();
+	for (int i = 0; i < n; i++) {
+		int kx, ky, kw, kh;
+		keypad_rect(ks, x, y, w, h, i, &kx, &ky, &kw, &kh);
+		draw_key_label(&ks->k[i], kx, ky, kw, kh, i == pressed, degrees);
 	}
 }
 

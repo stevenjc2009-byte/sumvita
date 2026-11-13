@@ -20,6 +20,11 @@
 #define CV_ACT_H 34
 #define CV_ACT_GAP 6
 #define CV_ACT_COLS 3
+/* the "Steps" pill in the answer area (drawn and hit-tested) */
+#define CV_PILL_W 104
+#define CV_PILL_H 26
+#define CV_PILL_X (CV_PANE_X + CV_PANE_W - CV_PILL_W - 10)
+#define CV_PILL_Y (CV_ANS_Y + 8)
 #define CV_KP_X 554
 #define CV_KP_Y (BODY_Y + 10)
 #define CV_KP_W 396
@@ -47,6 +52,8 @@ typedef struct {
 	bool pick_subject;
 	char subj[CV_MAX_SUBJ][12];
 	int nsubj;
+	bool err_edit;       /* the error on screen can be sent back to the editor */
+	unsigned err_ver;    /* editor version when the error was made */
 } CalcState;
 
 extern CalcState g_cs[3];
@@ -70,5 +77,12 @@ void cv_empty_hint(int mode, CalcAction a);
 void cv_same_hint(int mode, CalcAction a, const Res *r, const char *input);
 void cv_insert_ans(int mode);
 void cv_osk_accept(int mode, const char *text);
+
+/* calcview_nav.c */
+void cv_nav(int mode, const input_t *in);
+void cv_hints(int mode);
+void cv_hist_use(int mode, int i, bool answer);
+bool cv_edit_error(int mode);       /* BACK on an error: back to the input, cursor at the fault */
+bool cv_err_edit_ready(int mode);
 
 #endif

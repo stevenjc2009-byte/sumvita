@@ -134,31 +134,31 @@ static bool recur_body(Lx *L, const char **pp, int kwpos, Expr **out)
             r0 = p;
             while (isdig(*p)) p++;
             r1 = p;
-            if (*p != ')' || r1 == r0) return lfail(L, (int)(p - L->src), "Bad recurring decimal");
+            if (*p != ')' || r1 == r0) return lfail(L, (int)(p - L->src), "Type a recurring decimal like 0.1(27)");
             p++;
         }
     }
-    if (i1 == i0 && a1 == a0 && r1 == r0) return lfail(L, (int)(p - L->src), "Bad recurring decimal");
+    if (i1 == i0 && a1 == a0 && r1 == r0) return lfail(L, (int)(p - L->src), "Type a recurring decimal like 0.1(27)");
     int il = (int)(i1 - i0), al = (int)(a1 - a0), rl = (int)(r1 - r0);
-    if (il + al + rl > 18) return lfail(L, kwpos, "Recurring decimal too long");
+    if (il + al + rl > 18) return lfail(L, kwpos, "That recurring decimal is too long");
     int64_t I, A, AR;
     char ar[40];
     memcpy(ar, a0, (size_t)al);
     memcpy(ar + al, r0, (size_t)rl);
     if (!digits_i64(i0, il, &I) || !digits_i64(a0, al, &A) || !digits_i64(ar, al + rl, &AR))
-        return lfail(L, kwpos, "Recurring decimal too long");
+        return lfail(L, kwpos, "That recurring decimal is too long");
     int64_t p10a = 1, p10r = 1;
     for (int i = 0; i < al; i++) p10a *= 10;
     for (int i = 0; i < rl; i++) p10r *= 10;
     Rat frac, val;
     if (rl > 0) {
         int64_t den;
-        if (!i64_mul_ok(p10a, p10r - 1, &den)) return lfail(L, kwpos, "Recurring decimal too long");
+        if (!i64_mul_ok(p10a, p10r - 1, &den)) return lfail(L, kwpos, "That recurring decimal is too long");
         frac = rat_make(AR - A, den);
     } else {
         frac = rat_make(A, p10a);
     }
-    if (!rat_add(rat_int(I), frac, &val)) return lfail(L, kwpos, "Recurring decimal too long");
+    if (!rat_add(rat_int(I), frac, &val)) return lfail(L, kwpos, "That recurring decimal is too long");
     Expr *e = amalloc(sizeof(Expr));
     e->kind = E_RECUR;
     e->r = val;
@@ -174,13 +174,13 @@ static bool lex_recur(Lx *L, const char **pp, int kwpos)
 {
     const char *p = *pp;
     while (*p == ' ') p++;
-    if (*p != '(') return lfail(L, (int)(p - L->src), "recur needs ( )");
+    if (*p != '(') return lfail(L, (int)(p - L->src), "recur needs brackets: recur(0.1(27))");
     p++;
     while (*p == ' ') p++;
     Expr *e;
     if (!recur_body(L, &p, kwpos, &e)) return false;
     while (*p == ' ') p++;
-    if (*p != ')') return lfail(L, (int)(p - L->src), "Bad recurring decimal");
+    if (*p != ')') return lfail(L, (int)(p - L->src), "Type a recurring decimal like 0.1(27)");
     p++;
     Tok *t = push(L, TK_ATOM, kwpos, (int)(p - L->src) - kwpos);
     t->atom = e;
@@ -214,16 +214,16 @@ static bool lex_number(Lx *L, const char **pp)
     } else {
         numlen = (int)(p - st);
     }
-    if (*p == '.') return lfail(L, (int)(p - L->src), "Bad number");
+    if (*p == '.') return lfail(L, (int)(p - L->src), "A number can only have one decimal point");
     if (!dec && *p == '_') {                    /* mixed number w_n/d */
         const char *a = p + 1, *q = a;
         while (isdig(*q)) q++;
-        if (q == a || *q != '/' || !isdig(q[1])) return lfail(L, (int)(p - L->src), "Bad mixed number");
+        if (q == a || *q != '/' || !isdig(q[1])) return lfail(L, (int)(p - L->src), "Type a mixed number like 2_1/3");
         const char *b = q + 1, *r = b;
         while (isdig(*r)) r++;
         int64_t w, nn, dd;
         if (!digits_i64(st, numlen, &w) || !digits_i64(a, (int)(q - a), &nn) || !digits_i64(b, (int)(r - b), &dd))
-            return lfail(L, pos, "Number too big");
+            return lfail(L, pos, "That number is too big");
         if (dd == 0) return lfail(L, (int)(b - L->src), "Can't divide by 0");
         Expr *k[3] = {ex_int(w), ex_int(nn), ex_int(dd)};
         Tok *t = push(L, TK_ATOM, pos, (int)(r - st));
@@ -299,7 +299,7 @@ static const Sym SYMS[] = {
     {"<=", TK_REL, R_LE}, {">=", TK_REL, R_GE}, {"!=", TK_REL, R_NE},
     {"<", TK_REL, R_LT}, {">", TK_REL, R_GT}, {"=", TK_REL, R_EQ},
     {"+", TK_PLUS, 0}, {"-", TK_MINUS, 0}, {"*", TK_TIMES, 0}, {"/", TK_DIV, 0},
-    {"^", TK_POW, 0}, {"!", TK_BANG, 0}, {"%", TK_PCT, 0}, {"|", TK_BAR, 0}, {",", TK_COMMA, 0},
+    {"^", TK_POW, 0}, {"!", TK_BANG, 0}, {"%", TK_PCT, 0}, {"|", TK_BAR, 0}, {",", TK_COMMA, 0}, {";", TK_COMMA, 0},
     {"(", TK_LP, '('}, {"[", TK_LP, '['}, {")", TK_RP, ')'}, {"]", TK_RP, ']'},
 };
 #define NSYM ((int)(sizeof SYMS / sizeof SYMS[0]))
@@ -322,9 +322,9 @@ static bool rel_at(const unsigned char *s)
 static int lex_sep_word(const char *s, int i)
 {
     int l = sep_word_at(s, i), before = 0, after = 0;
-    for (int j = i - 1; l && j >= 0 && !before && s[j] != ',' && !sep_word_at(s, j); j--)
+    for (int j = i - 1; l && j >= 0 && !before && s[j] != ',' && s[j] != ';' && !sep_word_at(s, j); j--)
         before = rel_at((const unsigned char *)s + j);
-    for (int j = i + l; l && s[j] && !after && s[j] != ',' && !sep_word_at(s, j); j++)
+    for (int j = i + l; l && s[j] && !after && s[j] != ',' && s[j] != ';' && !sep_word_at(s, j); j++)
         after = rel_at((const unsigned char *)s + j);
     return before && after ? l : 0;
 }
@@ -358,7 +358,7 @@ bool lex_all(const char *src, Tok **out, int *ntok, char *err, int errcap, int *
         }
         if (*p == '"') {
             const char *q = strchr(p + 1, '"');
-            if (!q) return lfail(&L, pos, "Missing \"");
+            if (!q) return lfail(&L, pos, "A \" is missing to close the text");
             Tok *t = push(&L, TK_TEXT, pos, (int)(q + 1 - p));
             t->text = astrndup(p + 1, (size_t)(q - p - 1));
             p = q + 1;

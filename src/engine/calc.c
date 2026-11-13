@@ -9,6 +9,7 @@
 #include "arena.h"
 #include "calc.h"
 #include "calc_util.h"
+#include "parse_norm.h"
 #include "simplify_int.h"
 
 void calc_settings_default(CalcSettings *s)
@@ -244,7 +245,15 @@ static void run_algebra(CalcAction a, const Expr *t, const CalcSettings *s, Calc
     switch (a) {
     case ACT_EXPAND: ok = alg_expand(t, &out->steps, &res, err, sizeof err); break;
     case ACT_FACTOR: ok = alg_factor(t, &out->steps, &res, err, sizeof err); break;
-    case ACT_SOLVE: ok = alg_solve(t, s, &out->steps, &res, err, sizeof err); break;
+    case ACT_SOLVE:
+        ok = cs_factor_product(t, s, &out->steps, &res) || alg_solve(t, s, &out->steps, &res, err, sizeof err);
+        if (ok && res) {
+            char names[8][12];
+            bool symbolic = ex_vars(t, names, 8) >= 2;
+            if (symbolic) res = cs_tidy_answer(res);
+            cs_tidy_steps(&out->steps, symbolic);
+        }
+        break;
     case ACT_COMPLETE_SQ: ok = alg_complete_square(t, &out->steps, &res, err, sizeof err); break;
     case ACT_REARRANGE:
         if (!s->target_var[0]) { cu_fail(out, "Choose the letter to make the subject"); return; }
@@ -253,10 +262,15 @@ static void run_algebra(CalcAction a, const Expr *t, const CalcSettings *s, Calc
     default: break;
     }
     if (!ok || !res) {
-        cu_fail(out, "%s", err[0] ? err : "Can't do that to this");
+        cu_fail(out, "%s", err[0] ? err : "Can't do that with this input");
         return;
     }
-    out->answer = ex_print(a == ACT_SOLVE ? solve_display(res) : res);
+    out->answer = ex_print(a == ACT_SOLVE || a == ACT_COMPLETE_SQ ? solve_display(res) : res);
+    Expr *dec = a == ACT_SOLVE && cu_has_decimal(t) ? cs_decimal_answer(res) : NULL;
+    if (dec) {      /* a decimal typed: answer as a decimal, the fraction as the other form */
+        out->answer_alt = out->answer;
+        out->answer = ex_print(solve_display(dec));
+    }
     double v;
     EvalEnv env = {.degrees = s->degrees};
     if (res->kind == E_NUM && ex_eval(res, &env, &v)) {
@@ -318,11 +332,16 @@ void calc_run(CalcAction action, const char *input, const CalcSettings *s, CalcR
     if ((unsigned)action >= (unsigned)ACT_COUNT) { cu_fail(out, "Unknown action"); return; }
 
     char err[120];
-    int pos = -1;
-    Expr *e = ex_parse(input ? input : "", err, sizeof err, &pos);
+    int pos = -1, off = 0;
+    CalcAction cmd = ACT_AUTO;
+    if (!input) input = "";
+    off = pn_command(input, &cmd);          /* "solve 2x+3=11": the word picks the action on = */
+    if (off > 0 && action == ACT_AUTO) action = cmd;
+    input += off;
+    Expr *e = ex_parse(input, err, sizeof err, &pos);
     if (!e) {
-        cu_fail(out, "%s", err[0] ? err : "Can't read that");
-        out->error_pos = pos;
+        cu_fail(out, "%s", err[0] ? err : "Can't read that: check the brackets and signs");
+        out->error_pos = pos >= 0 ? pos + off : pos;
         return;
     }
     out->input_echo = ex_print(e);
@@ -332,6 +351,7 @@ void calc_run(CalcAction action, const char *input, const CalcSettings *s, CalcR
         cu_fail(out, "%s needs a number, not letters", calc_action_name(action) + (action == ACT_STD_FORM ? 0 : 4));
         return;
     }
+    if ((action == ACT_SOLVE || (action == ACT_AUTO && is_relation_input(t))) && cs_precheck(t, input, out)) return;
     dispatch(action, t, s, out);
     if (!out->ok) {
         out->answer = "";

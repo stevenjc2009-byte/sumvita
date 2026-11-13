@@ -38,6 +38,7 @@ typedef struct {
 static FT_Library g_ft;
 static ttf_t g_main[FW_COUNT], g_fb[FW_COUNT];
 static float g_space[FW_COUNT];   /* space advance / px, from the main face */
+static int g_fb_tried[FW_COUNT];  /* DejaVu is read on first need (1.47 MB) */
 /* [0] main, [1] fallback; NULL until that size is first drawn */
 static vita2d_font *g_v[2][FW_COUNT][PX_MAX + 1];
 static int g_nfonts;
@@ -95,23 +96,35 @@ void font_init(void)
 		log_printf("font: FT_Init_FreeType failed");
 		return;
 	}
-	for (int w = 0; w < FW_COUNT; w++) {
+	for (int w = 0; w < FW_COUNT; w++)
 		if (load_file(k_main_files[w], &g_main[w]) != 0)
 			log_printf("font: cannot read %s", k_main_files[w]);
-		/* DejaVu regular serves REG and MED: share the buffer. */
-		if (w > 0 && same_file(w, w - 1, k_fb_files))
-			g_fb[w] = g_fb[w - 1];
-		else if (load_file(k_fb_files[w], &g_fb[w]) != 0)
-			log_printf("font: cannot read %s", k_fb_files[w]);
-	}
 	/* A missing weight falls back to regular. */
 	for (int w = 1; w < FW_COUNT; w++)
 		if (!g_main[w].data)
 			g_main[w] = g_main[FW_REG];
 	for (int w = 0; w < FW_COUNT; w++)
 		g_space[w] = space_ratio(g_main[w].face);
-	log_printf("font: regular %s, fallback %s", g_main[FW_REG].data ? "ok" : "FAILED",
-		   g_fb[FW_REG].data ? "ok" : "FAILED");
+	log_printf("font: regular %s, fallback on first use", g_main[FW_REG].data ? "ok" : "FAILED");
+}
+
+/* Reads weight w's DejaVu file the first time a code point needs it (one try).
+ * DejaVu regular serves REG and MED: they share one buffer and face. */
+static void fb_load(fweight_t w)
+{
+	if (g_fb_tried[w])
+		return;
+	for (int o = 0; o < FW_COUNT; o++)
+		if (o != (int)w && g_fb_tried[o] && same_file((int)w, o, k_fb_files)) {
+			g_fb[w] = g_fb[o];
+			g_fb_tried[w] = 1;
+			return;
+		}
+	g_fb_tried[w] = 1;
+	if (load_file(k_fb_files[w], &g_fb[w]) != 0)
+		log_printf("font: cannot read %s", k_fb_files[w]);
+	else
+		log_printf("font: fallback %s loaded", k_fb_files[w]);
 }
 
 /* The vita2d_font for one face/weight/size, made on first use. */
@@ -158,9 +171,10 @@ int utf8_decode(const char *s, unsigned int *cp)
 /* 0 = main face, 1 = fallback (a code point Ubuntu lacks). */
 static int use_fallback(fweight_t w, unsigned int cp)
 {
-	if (cp < 0x80 || !g_main[w].face || !g_fb[w].data)
+	if (cp < 0x80 || !g_main[w].face || FT_Get_Char_Index(g_main[w].face, cp) != 0)
 		return 0;
-	return FT_Get_Char_Index(g_main[w].face, cp) == 0;
+	fb_load(w);
+	return g_fb[w].data != NULL;
 }
 
 static int runs(fweight_t w, int x, int baseline, unsigned int color, int px, const char *utf8, int draw)
@@ -195,7 +209,9 @@ static int runs(fweight_t w, int x, int baseline, unsigned int color, int px, co
 			continue;
 		if (draw)
 			vita2d_font_draw_text(f, x + width, baseline, color, (unsigned int)px, run);
-		width += vita2d_font_text_width(f, (unsigned int)px, run);
+		/* drawing only needs the width to place a later run */
+		if (!draw || *p)
+			width += vita2d_font_text_width(f, (unsigned int)px, run);
 	}
 	return width;
 }

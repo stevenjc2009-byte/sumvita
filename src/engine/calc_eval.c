@@ -91,7 +91,10 @@ static const char *why(const Expr *e, const EvalEnv *env)
     case E_FUNC:
         switch (e->op) {
         case F_SQRT: return "Maths error: square root of a negative number";
-        case F_ROOT: return "Maths error: even root of a negative number";
+        case F_ROOT:
+            if (ka && (a < 1 || a != round(a))) return "Maths error: the root index must be a whole number, 1 or more";
+            if (kb && b < 0) return "Maths error: even root of a negative number";
+            return "Maths error: answer too big";
         case F_LN: case F_LOG: return "Maths error: log of 0 or a negative number";
         case F_TAN: return env->degrees ? "Maths error: tan 90\xC2\xB0 is undefined" : "Maths error: tan is undefined here";
         case F_ASIN: case F_ACOS: return "Maths error: sin\xE2\x81\xBB\xC2\xB9 and cos\xE2\x81\xBB\xC2\xB9 need a value from -1 to 1";

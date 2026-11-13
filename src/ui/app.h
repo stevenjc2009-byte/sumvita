@@ -41,13 +41,14 @@ typedef void (*sheet_done_fn)(const char *text, void *ctx);
 void app_open_sheet(const char *title, const char *hint, const char *initial, sheet_done_fn done, void *ctx);
 void app_open_settings(void);
 void app_open_about(void);
+void app_open_help(int page);
 bool app_overlay_open(void);
 void app_close_overlays(void);
 void app_request_quit(void);
 
 /* chrome.c */
 void topbar_draw(int mode);
-int  topbar_hit(int tx, int ty);        /* mode tab, MODE_COUNT = settings gear, -1 none */
+int  topbar_hit(int tx, int ty);        /* mode tab, MODE_COUNT = settings gear, +1 = DEG chip, +2 = help ?, -1 none */
 void hintbar_draw(const Hint *h, int n);
 void toast_draw(const char *msg, int alpha);
 void panel_title(int x, int y, const char *title, const char *sub);
@@ -89,6 +90,9 @@ void settings_view_draw(void);
 void about_open(void);
 bool about_update(const input_t *in);
 void about_draw(void);
+void help_open(int page);
+bool help_update(const input_t *in);
+void help_draw(void);
 
 /* tour.c: scripted screenshots when ux0:data/Sumvita/tour.txt exists */
 void tour_start_if_requested(void);

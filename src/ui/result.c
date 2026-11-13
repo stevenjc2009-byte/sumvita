@@ -70,7 +70,7 @@ static void copy_out(Res *out, const CalcResult *cr, const char *input, const ch
 	out->error[sizeof out->error - 1] = 0;
 	out->error_pos = cr->error_pos;
 	if (!cr->ok && !out->error[0])
-		strcpy(out->error, "Can't do that one");
+		strcpy(out->error, "Couldn't work that out. Check the input, or try another action");
 	int n = cr->steps.n > 0 && cr->steps.v ? cr->steps.n : 0;
 	if (n) {
 		out->steps = calloc((size_t)n, sizeof(RStep));

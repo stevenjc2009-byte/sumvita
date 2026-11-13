@@ -37,6 +37,17 @@ static int g_sel;
 static int g_pressed = -1;
 static uint64_t g_pressed_until;
 static int g_scroll;
+static int g_ks = KS_ENTRY, g_next_ks = KS_ENTRY;
+
+void sheet_set_keyset(int id)
+{
+	g_next_ks = id;
+}
+
+static int first_key(void)
+{
+	return g_ks == KS_ENTRY ? 4 * 8 + 0 : 0;   /* the "7" key */
+}
 
 void sheet_open(const char *title, const char *hint, const char *initial, sheet_done_fn done, void *ctx)
 {
@@ -48,8 +59,21 @@ void sheet_open(const char *title, const char *hint, const char *initial, sheet_
 	if (initial && initial[0])
 		ed_load(&g_ed, initial);
 	g_on_editor = false;
-	g_sel = 4 * 8 + 0;   /* the "7" key */
+	g_ks = g_next_ks;
+	g_next_ks = KS_ENTRY;
+	g_sel = first_key();
 	g_scroll = 0;
+}
+
+/* type the whole text on the system keyboard */
+static void osk_edit(void)
+{
+	char cur[512], out[512];
+	ed_serialize(&g_ed, cur, (int)sizeof cur);
+	if (osk_prompt(g_title, cur, OSK_TEXT, out, sizeof out) == 1) {
+		osk_text_tidy(out);
+		ed_load(&g_ed, out);
+	}
 }
 
 static void finish(void)
@@ -63,7 +87,7 @@ static void finish(void)
 /* returns false when the sheet closed */
 static bool press(int idx)
 {
-	const Keyset *ks = keyset_get(KS_ENTRY);
+	const Keyset *ks = keyset_get(g_ks);
 	if (idx < 0 || idx >= ks->cols * ks->rows)
 		return true;
 	g_pressed = idx;
@@ -74,15 +98,13 @@ static bool press(int idx)
 		finish();
 		return false;
 	case KC_AC: ed_clear(&g_ed); break;
-	case KC_OSK: {
-		char cur[512], out[512];
-		ed_serialize(&g_ed, cur, (int)sizeof cur);
-		if (osk_prompt(g_title, cur, OSK_TEXT, out, sizeof out) == 1) {
-			osk_text_tidy(out);
-			ed_load(&g_ed, out);
-		}
+	case KC_OSK:
+		osk_edit();
 		break;
-	}
+	case KC_MORE:   /* the big-key pad -> the full keypad, same text */
+		g_ks = KS_ENTRY;
+		g_sel = first_key();
+		break;
 	case KC_DEGRAD:
 		g_set.degrees = !g_set.degrees;
 		settings_save();
@@ -97,12 +119,12 @@ bool sheet_update(const input_t *in)
 	static const Hint hints[] = {
 		{ GLYPH_CONFIRM, "Press key" },
 		{ GLYPH_BACK, "Delete" },
-		{ GLYPH_START, "OK" },
 		{ GLYPH_SELECT, "Cancel" },
+		{ GLYPH_START, "OK" },
 		{ GLYPH_TRIANGLE, "Keyboard" },
 	};
 	app_hints(hints, 5);
-	const Keyset *ks = keyset_get(KS_ENTRY);
+	const Keyset *ks = keyset_get(g_ks);
 	if (app_now() > g_pressed_until)
 		g_pressed = -1;
 	if (in->pressed & IN_SELECT)
@@ -113,11 +135,8 @@ bool sheet_update(const input_t *in)
 	}
 	if (in->pressed & IN_BACK)
 		ed_backspace(&g_ed);
-	if (in->pressed & IN_TRIANGLE) {
-		for (int i = 0; i < ks->cols * ks->rows; i++)
-			if (ks->k[i].act == KA_CMD && ks->k[i].arg == KC_OSK)
-				return press(i);
-	}
+	if (in->pressed & IN_TRIANGLE)
+		osk_edit();
 	if (in->pressed & IN_L)
 		ed_move(&g_ed, 0);
 	if (in->pressed & IN_R)
@@ -173,6 +192,18 @@ void sheet_draw(void)
 	font_draw_w(FW_BOLD, SH_X + 20, SH_Y + 12, COL_TEXT, 21, g_title);
 	if (g_hint[0])
 		font_draw(SH_X + 20, SH_Y + 38, COL_MUTED, 14, g_hint);
+	/* what the buttons do: the circle deletes, SELECT leaves (opposite of the rest of the app) */
+	int hx = SH_X + SH_W - 20;
+	static const struct { glyph_t g; const char *t; } hb[] = {
+		{ GLYPH_SELECT, "Cancel" }, { GLYPH_BACK, "Delete" },
+	};
+	for (int i = 0; i < 2; i++) {
+		hx -= font_width(15, hb[i].t);
+		font_draw(hx, SH_Y + 14, COL_TEXT2, 15, hb[i].t);
+		hx -= 6 + draw_glyph_width(hb[i].g);
+		draw_glyph(hb[i].g, hx, SH_Y + 14 + (font_height(15) - GLYPH_SIZE) / 2);
+		hx -= 18;
+	}
 
 	draw_rrect(SH_ED_X, SH_ED_Y, SH_ED_W, SH_ED_H, 14, COL_PANEL);
 	draw_rrect_outline(SH_ED_X, SH_ED_Y, SH_ED_W, SH_ED_H, 14, g_on_editor ? 2 : 1,
@@ -198,6 +229,6 @@ void sheet_draw(void)
 	if (ed_is_empty(&g_ed))
 		font_draw(SH_ED_X + 24, base - ml_text_asc(18) - 2, COL_DIM, 18, "Empty");
 
-	keypad_draw(keyset_get(KS_ENTRY), SH_KP_X, SH_KP_Y, SH_KP_W, SH_KP_H, g_on_editor ? -1 : g_sel, g_pressed,
+	keypad_draw(keyset_get(g_ks), SH_KP_X, SH_KP_Y, SH_KP_W, SH_KP_H, g_on_editor ? -1 : g_sel, g_pressed,
 		    g_set.degrees);
 }

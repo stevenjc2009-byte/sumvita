@@ -175,7 +175,7 @@ void calc_to_mixed(const Expr *t0, const CalcSettings *s, CalcResult *out)
         finish_rat(r, s, out);
         return;
     }
-    if (rat_cmp(r, rat_int(1)) < 0 && !rat_is_neg(r)) {
+    if (rat_cmp(rat_abs(r), rat_int(1)) < 0) {
         steps_add(st, "Already a proper fraction", "The top is smaller than the bottom", NULL);
         if (neg) r = rat_neg(r);
         finish_rat(r, s, out);

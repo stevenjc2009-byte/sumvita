@@ -8,6 +8,7 @@
 #include "ui/history.h"
 #include "ui/mlayout.h"
 #include "ui/settings.h"
+#include "ui/text.h"
 #include "ui/theme.h"
 
 #include <stdio.h>
@@ -23,15 +24,37 @@ static const char *entry_answer(const HEntry *h)
 	return h->r.ok ? h->r.answer : h->r.error;
 }
 
+/* An entry's height only depends on its own text (the pane width and fonts
+ * never change at run time), so it is measured once and kept in the entry. */
 int cv_hist_entry_h(int i)
 {
 	const HEntry *h = history_get(i);
 	if (!h)
 		return 0;
+	if (h->h)
+		return h->h;
 	const MLayout *a = mlc_fit(h->r.echo, HIST_IN_PX, 12, HIST_MAXW);
 	const MLayout *b = h->r.ok ? mlc_fit(entry_answer(h), HIST_ANS_PX, 14, HIST_MAXW)
 				   : mlc_text(entry_answer(h), 15, 0);
-	return HIST_PAD + a->asc + a->desc + 4 + b->asc + b->desc + HIST_PAD;
+	int eh = HIST_PAD + a->asc + a->desc + 4 + b->asc + b->desc + HIST_PAD;
+	history_set_h(i, eh);
+	return eh;
+}
+
+/* sum of all entry heights, recomputed only after an entry was added or removed */
+static int hist_total(void)
+{
+	static unsigned ver;
+	static bool valid;
+	static int total;
+	if (!valid || ver != history_version()) {
+		total = 0;
+		for (int i = 0, n = history_count(); i < n; i++)
+			total += cv_hist_entry_h(i);
+		ver = history_version();
+		valid = true;
+	}
+	return total;
 }
 
 /* Entries are bottom-anchored: newest just above the editor. */
@@ -58,7 +81,8 @@ static void draw_history(int mode)
 		font_draw_c(FW_REG, CV_PANE_X + CV_PANE_W / 2, CV_HIST_Y + CV_HIST_H / 2 - 20, COL_DIM, 15,
 			    "History appears here");
 		font_draw_c(FW_REG, CV_PANE_X + CV_PANE_W / 2, CV_HIST_Y + CV_HIST_H / 2 + 2, COL_DIM, 13,
-			    "Up from the input to scroll back and reuse a sum");
+			    mode == MODE_ALG ? "Try x\xC2\xB2\xE2\x88\x92" "5x+6=0 then =, or 2x+3y=12, x\xE2\x88\x92y=1 for simultaneous"
+					     : "Up from the input to scroll back and reuse a sum");
 		draw_clip_off();
 		return;
 	}
@@ -73,9 +97,7 @@ static void draw_history(int mode)
 		if (below + hh > s->hist_scroll + CV_HIST_H)
 			s->hist_scroll = below + hh - CV_HIST_H;
 	}
-	int total = 0;
-	for (int i = 0; i < n; i++)
-		total += cv_hist_entry_h(i);
+	int total = hist_total();
 	int maxs = total - CV_HIST_H;
 	if (s->hist_scroll > maxs)
 		s->hist_scroll = maxs > 0 ? maxs : 0;
@@ -148,7 +170,20 @@ static void draw_editor(int mode)
 	draw_clip_off();
 	if (ed_is_empty(&s->ed))
 		font_draw(x + 24, base - ml_text_asc(18) - 2, COL_DIM, 18,
-			  mode == MODE_ALG ? "Type an expression or equation" : "Type a calculation");
+			  mode == MODE_ALG ? "Type an equation, e.g. x\xC2\xB2\xE2\x88\x92" "5x+6=0" : "Type a calculation");
+}
+
+/* a plain decimal number (digits, point, minus): says which form is on show */
+static bool is_decimal(const char *t)
+{
+	for (; *t; t++) {
+		if (!strncmp(t, "\xE2\x88\x92", 3)) {
+			t += 2;   /* U+2212 minus */
+		} else if (!strchr("0123456789.-", *t)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static void draw_answer(int mode)
@@ -166,25 +201,31 @@ static void draw_answer(int mode)
 	Res *r = &s->cur;
 	const char *lab = r->label && r->label[0] ? r->label : "Answer";
 	font_draw_w(FW_MED, x + 16, y + 10, COL_MUTED, 14, lab);
-	if (s->show_alt)
+	const char *txt = s->show_alt && r->alt[0] ? r->alt : r->answer;
+	if (s->show_alt && r->ok)
 		font_draw_w(FW_MED, x + 16 + font_width_w(FW_MED, 14, lab) + 10, y + 10, theme_accent(), 13,
-			    "S\xE2\x87\x94" "D");
+			    is_decimal(txt) ? "Decimal" : "Exact");
 	if (r->nsteps) {
-		int bw = 104;
-		int bx = x + w - bw - 10;
-		draw_rrect(bx, y + 8, bw, 26, 13, COL_PANEL3);
+		int bx = CV_PILL_X;
+		draw_rrect(bx, CV_PILL_Y, CV_PILL_W, CV_PILL_H, 13, COL_PANEL3);
 		int gx = bx + 10;
 		draw_glyph(GLYPH_TRIANGLE, gx, y + 12);
 		font_draw_w(FW_MED, gx + GLYPH_SIZE + 6, y + 13, COL_TEXT2, 14, "Steps");
 		char nb[8];
 		snprintf(nb, sizeof nb, "%d", r->nsteps);
-		font_draw_r(FW_REG, bx + bw - 10, y + 13, COL_DIM, 13, nb);
+		font_draw_r(FW_REG, bx + CV_PILL_W - 10, y + 13, COL_DIM, 13, nb);
 	}
 	if (!r->ok) {
-		font_draw_w(FW_MED, x + 16, y + 44, COL_ERR, 18, r->error);
+		char el[2][TEXT_LINE_MAX];
+		int nl = text_wrap(16, r->error, w - 32, 2, el);
+		for (int i = 0; i < nl; i++)
+			font_draw_w(FW_MED, x + 16, y + 40 + i * (font_height(16) + 1), COL_ERR, 16, el[i]);
+		if (cv_err_edit_ready(mode)) {
+			draw_glyph(GLYPH_BACK, x + 16, y + h - 26);
+			font_draw(x + 16 + GLYPH_SIZE + 6, y + h - 26, COL_MUTED, 14, "to edit");
+		}
 		return;
 	}
-	const char *txt = s->show_alt && r->alt[0] ? r->alt : r->answer;
 	/* fit the width, then the height under the label row (a fraction at 32 px
 	 * is taller than the box and used to run into its bottom edge) */
 	const MLayout *l = NULL;
@@ -201,9 +242,10 @@ static void draw_answer(int mode)
 	const char *eq = r->has_value && s->show_alt ? "\xE2\x89\x88" : "=";
 	if (!strchr(txt, '=') && !strchr(txt, '<') && !strchr(txt, '>'))
 		font_draw_base(FW_REG, ax - 14 - font_width(28, eq), base, COL_DIM, 28, eq);
-	if (r->alt[0] && !s->show_alt) {
+	if (r->alt[0]) {
 		draw_glyph(GLYPH_SQUARE, x + 16, y + h - 26);
-		font_draw(x + 16 + GLYPH_SIZE + 6, y + h - 26, COL_MUTED, 14, "other form");
+		font_draw(x + 16 + GLYPH_SIZE + 6, y + h - 26, COL_MUTED, 14,
+			  is_decimal(txt) ? "Show as fraction/exact" : "Show as decimal");
 	}
 }
 

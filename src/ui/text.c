@@ -51,23 +51,78 @@ static void add_ellipsis(int px, char *line, int max_w)
 	}
 }
 
+/* Width of [a, b): one word or the start of one (no spaces in it). */
+static int span_w(int px, const char *a, const char *b)
+{
+	char buf[TEXT_LINE_MAX];
+	copy_span(buf, a, b);
+	return font_width(px, buf);
+}
+
+/* The first character from `from` (before `limit`) whose prefix [p, c + len)
+ * is wider than max_w, never p itself: the per-character rule, run only over
+ * the part of the current word not yet known to fit. ws is the word's start
+ * and wdone the width of [p, ws). */
+static const char *first_over(int px, const char *p, const char *ws, int wdone, int max_w,
+			      const char *from, const char *limit)
+{
+	for (const char *c = from; c < limit;) {
+		unsigned int cp;
+		int len = cp_len(c, &cp);
+		if (c > p && wdone + span_w(px, ws, c + len) > max_w)
+			return c;
+		c += len;
+	}
+	return limit;
+}
+
+/* A line breaks before the first character whose prefix no longer fits, at the
+ * last break point before it. font_width measures text between spaces on its
+ * own and adds a fixed width per space, so the prefix width is the width of the
+ * whole words and spaces so far (wdone) plus the current part word: each word
+ * is measured at its break points, and character by character only where a
+ * line overflows. Widths only grow as text is appended, so the breaks are the
+ * same as measuring every prefix. */
 int text_wrap(int px, const char *utf8, int max_w, int max_lines, char lines[][TEXT_LINE_MAX])
 {
 	int n = 0;
 	const char *p = utf8 ? utf8 : "";
-	char buf[TEXT_LINE_MAX];
+	int sp = font_width(px, " ");
 	while (*p && n < max_lines) {
 		while (*p == ' ') p++;
 		if (!*p) break;
 		const char *q = p, *brk = NULL;
+		const char *ws = p;    /* start of the current word */
+		const char *known = p; /* everything before this fits */
+		int wdone = 0;         /* width of [p, ws) */
 		while (*q) {
 			unsigned int cp, next = 0;
 			int len = cp_len(q, &cp);
-			if (q + len - p >= TEXT_LINE_MAX - 4) break;
-			copy_span(buf, p, q + len);
-			if (font_width(px, buf) > max_w && q > p) break;
+			if (q + len - p >= TEXT_LINE_MAX - 4) {
+				if (ws < q && wdone + span_w(px, ws, q) > max_w)
+					q = first_over(px, p, ws, wdone, max_w, known, q);
+				break;
+			}
 			if (q[len]) cp_len(q + len, &next);
-			if (q[len] == ' ' || is_cjk(cp) || (q[len] && is_cjk(next)))
+			int cand = q[len] == ' ' || is_cjk(cp) || (q[len] && is_cjk(next));
+			if (cp == ' ') {
+				if (wdone + sp > max_w && q > p)
+					break;
+				wdone += sp;
+				ws = known = q + len;
+			} else if (cand || !q[len]) {
+				int w = wdone + span_w(px, ws, q + len);
+				if (w > max_w && q > p) {
+					q = first_over(px, p, ws, wdone, max_w, known, q + len);
+					break;
+				}
+				known = q + len;
+				if (q[len] == ' ') {
+					wdone = w;
+					ws = q + len;
+				}
+			}
+			if (cand)
 				brk = q + len;
 			q += len;
 		}

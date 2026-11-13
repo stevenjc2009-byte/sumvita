@@ -1,0 +1,42 @@
+# u3.tour - v1.2 GCSE tool search, field-sheet keypads and the algebra keypad.
+# Run: powershell -File tests/vita3k/run.ps1 -Evidence <new dir> -TourFile tests/vita3k/u3.tour
+# NEEDS the "gsearch TEXT" tour command (tour_cmds.c -> gcse_search(TEXT), declared in
+# ui/tools_view_int.h): the system keyboard cannot be typed into by a tour.
+log u3 start
+set exact 1
+mode gcse
+gcat 0
+wait 10
+shot u3_list_search_hint
+
+# the real entry path: triangle opens the system keyboard (the tour closes it at once)
+press TRIANGLE
+wait 10
+shot u3_search_osk_cancelled
+
+# search by name
+gsearch pythag
+shot u3_search_pythag
+# search by name and description, across topics
+gsearch area
+shot u3_search_area
+# circle clears the search, back to the topic list
+press BACK
+shot u3_search_cleared
+
+# plain number field: the big-key number pad
+tool area_rect
+press CONFIRM
+shot u3_sheet_number
+press SELECT
+
+# comma list field: the pad with a comma key
+tool stat_list
+press CONFIRM
+shot u3_sheet_list
+press SELECT
+
+# algebra keypad: relation keys tinted like letters, the work-it-out key says Go
+mode alg
+shot u3_alg_keypad
+end

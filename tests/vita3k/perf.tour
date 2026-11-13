@@ -1,0 +1,47 @@
+# perf.tour - fixed screens for render-cost measurement. Each shot logs
+# "PERF name draws=N glyphs=G cpu_us=T" for the frame before it (src/ui/perf.c).
+log perf start
+hist_clear
+set deg 1
+set dp -1
+set sf 0
+set exact 1
+mode calc
+shot p_calc_empty
+input 3/4+5/6
+eval auto
+shot p_calc_answer
+mode sci
+shot p_sci_keypad
+mode alg
+input 2x^2y-8y+3x^2-12
+eval factor
+shot p_alg_answer
+steps
+shot p_steps_open
+close
+mode graph
+graph 0 x^2-2x-3
+graph 1 2x-1
+graph 2 sin(x)
+gview 0
+shot p_graph3
+graph 3 x^3/10
+graph 4 cos(x)
+graph 5 1/x
+gview 0
+shot p_graph6
+gview 3
+shot p_graph6_trace
+mode gcse
+gcat 0
+shot p_gcse_list
+tool hcf_lcm
+field 0 84
+field 1 90
+run
+shot p_gcse_result
+mode calc
+stress 60
+shot p_hist60
+end

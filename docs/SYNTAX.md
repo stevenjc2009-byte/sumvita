@@ -18,6 +18,19 @@ It is UTF-8. `ex_parse()` (src/engine/parse.c) is the reference implementation.
 
 No `e`-notation in input. Standard form is typed as `3.2×10^5` (`*` and `×` both mean times).
 
+## Accepted alternative input (normalised before parsing, src/engine/parse_norm.c)
+| Typed | Read as |
+|---|---|
+| `²` `³` | `^2` `^3` |
+| `½` `¼` `¾` | `(1/2)` `(1/4)` `(3/4)`; straight after a whole number (`2½`) a mixed number `2_1/2` |
+| `–` `—` (en/em dash) | `-` |
+| `x**2` | `x^2` |
+| `;` | same as `,` (list and equation-system separator) |
+| `solve`, `simplify`, `expand`, `factorise`, `factorize`, `factor`, `rearrange` first, any case, optional `:` | the word is dropped; with the `=` (auto) key it also picks that action. Error positions still point into what was typed |
+| `X` and `x` both present | `X` means `x`. A lone `X` stays a variable `X` |
+
+Parse errors are written in plain English ("Something is missing at the end", "That symbol can't go there", "A bracket is missing: add a )").
+
 ## Variables and constants
 - Any single letter a–z or A–Z except `e` is a variable. `xy` = x·y, `2ab` = 2·a·b.
 - `θ` is a variable.

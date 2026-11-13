@@ -1,0 +1,60 @@
+# u1.tour - v1.2 Help, Settings descriptions, top bar, version text.
+log u1 start
+set deg 1
+mode calc
+shot u1_topbar_calc
+mode sci
+shot u1_topbar_sci
+set deg 0
+shot u1_topbar_rad
+set deg 1
+mode calc
+# every Help page
+help 1
+shot u1_help_1
+help 2
+shot u1_help_2
+help 3
+shot u1_help_3
+help 4
+shot u1_help_4
+help 5
+shot u1_help_5
+help 6
+shot u1_help_6_top
+press DOWN 8
+shot u1_help_6_scrolled
+# L/R change page: R from page 6 wraps to 1, L goes back to 6
+press R
+shot u1_help_wrap_to_1
+press L
+shot u1_help_back_to_6
+press BACK
+shot u1_help_closed
+# Settings: SELECT opens it with the first row (How to use Sumvita) focused
+press SELECT
+shot u1_settings_help_row
+press DOWN 2
+shot u1_settings_dp_desc
+press DOWN 2
+shot u1_settings_answers_desc
+press DOWN 2
+press CONFIRM
+shot u1_settings_clear_pending
+press DOWN
+shot u1_settings_about_row
+press CONFIRM
+shot u1_about_version
+press BACK
+# open Help from the first Settings row, close it, back in Settings
+press UP 7
+press CONFIRM
+shot u1_help_from_settings
+press BACK
+shot u1_settings_after_help
+close
+# the ? chip in the top bar (tap it), then close by tapping outside the panel
+tap 843 23
+shot u1_help_from_chip
+close
+end

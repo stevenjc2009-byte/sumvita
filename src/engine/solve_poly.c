@@ -2,6 +2,7 @@
  * linear -> solve_linear, quadratic -> solve_quad, cubic and above -> pure powers,
  * the factor theorem for rational roots, numeric roots for what is left. */
 #include "solve_int.h"
+#include "solve_ext.h"
 #include "arena.h"
 #include <math.h>
 #include <string.h>
@@ -21,7 +22,10 @@ static void numeric_rest(SvCtx *c, const Rat *q, int d, SvRoots *R, const char *
     memset(&T, 0, sizeof T);
     for (int i = 0; i < n; i++) { sv_add_real(R, roots[i]); sv_add_real(&T, roots[i]); }
     sv_step(c, "Solve numerically", note,
-            n ? sv_or_list(c, &T, true) : NULL);
+            n ? sv_or_list_num(c, &T) : NULL);
+    /* GCSE trial and improvement: one bracketing line per decimal place */
+    if (d == 3)
+        for (int i = 0; i < n; i++) sv_trial_steps(c, a, d, roots[i]);
     if (!n) sv_step(c, "No real solutions", "This part has no real roots.", NULL);
 }
 

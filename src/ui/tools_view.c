@@ -3,6 +3,7 @@
 #include "ui/tools_view_int.h"
 
 #include "ui/draw.h"
+#include "ui/keypad.h"
 #include "ui/settings.h"
 
 #include <stdint.h>
@@ -38,10 +39,11 @@ void tv_choice(const char *choices, int i, char *out, int cap)
 	snprintf(out, (size_t)cap, "%.*s", n, p);
 }
 
-static void load_tools(void)
+void tv_load_tools(void)
 {
 	int n = 0;
 	const Tool *all = tools_all(&n);
+	g_tv.searching = false;
 	g_tv.ntools = 0;
 	for (int i = 0; i < n && g_tv.ntools < TV_MAX_TOOLS; i++)
 		if (g_tv.ncats > 0 && strcmp(all[i].category, g_tv.cats[g_tv.cat]) == 0)
@@ -56,7 +58,7 @@ void gcse_screen_init(void)
 	res_init(&g_tv.res);
 	g_tv.ncats = tools_categories(g_tv.cats, TV_MAX_CATS);
 	g_tv.pressed_run = -1;
-	load_tools();
+	tv_load_tools();
 }
 
 static void open_tool(const Tool *t, bool examples)
@@ -137,32 +139,49 @@ static void activate_field(int i)
 		cycle_choice(i, 1);
 		return;
 	}
+	sheet_set_keyset(f->kind == TF_LIST ? KS_LIST : f->kind == TF_NUMBER ? KS_NUMBER : KS_ENTRY);
 	app_open_sheet(f->label, f->hint, g_tv.vals[i], field_done, (void *)(intptr_t)i);
 }
 
 static void list_update(const input_t *in)
 {
 	static const Hint hints[] = {
-		{ GLYPH_DPAD, "Choose" }, { GLYPH_CONFIRM, "Open" }, { GLYPH_BACK, "Back" }, { GLYPH_LR, "Mode" },
+		{ GLYPH_DPAD, "Choose" }, { GLYPH_CONFIRM, "Open" }, { GLYPH_TRIANGLE, "Search" }, { GLYPH_LR, "Mode" },
 	};
-	app_hints(hints, 4);
+	static const Hint shints[] = {
+		{ GLYPH_DPAD, "Choose" }, { GLYPH_CONFIRM, "Open" }, { GLYPH_TRIANGLE, "Search again" },
+		{ GLYPH_BACK, "Clear search" }, { GLYPH_LR, "Mode" },
+	};
+	if (g_tv.searching)
+		app_hints(shints, 5);
+	else
+		app_hints(hints, 4);
+	if (in->pressed & IN_TRIANGLE)
+		tv_search_prompt();
+	if (g_tv.searching && (in->pressed & (IN_BACK | IN_LEFT))) {
+		tv_search_clear();
+		g_tv.on_tools = false;
+		return;
+	}
 	if (!g_tv.on_tools) {
 		int prev = g_tv.cat;
 		if (in->pressed & IN_UP) g_tv.cat = (g_tv.cat + g_tv.ncats - 1) % (g_tv.ncats ? g_tv.ncats : 1);
 		if (in->pressed & IN_DOWN) g_tv.cat = (g_tv.cat + 1) % (g_tv.ncats ? g_tv.ncats : 1);
-		if (g_tv.cat != prev) load_tools();
+		if (g_tv.cat != prev) tv_load_tools();
 		if ((in->pressed & (IN_RIGHT | IN_CONFIRM)) && g_tv.ntools > 0) g_tv.on_tools = true;
 	} else {
 		int n = g_tv.ntools;
-		if (in->pressed & IN_UP) g_tv.tool_sel = (g_tv.tool_sel + n - 1) % n;
-		if (in->pressed & IN_DOWN) g_tv.tool_sel = (g_tv.tool_sel + 1) % n;
+		if (n > 0 && (in->pressed & IN_UP)) g_tv.tool_sel = (g_tv.tool_sel + n - 1) % n;
+		if (n > 0 && (in->pressed & IN_DOWN)) g_tv.tool_sel = (g_tv.tool_sel + 1) % n;
 		if (in->pressed & (IN_LEFT | IN_BACK)) g_tv.on_tools = false;
-		else if (in->pressed & IN_CONFIRM) open_tool(g_tv.tools[g_tv.tool_sel], false);
+		else if (n > 0 && (in->pressed & IN_CONFIRM)) open_tool(g_tv.tools[g_tv.tool_sel], false);
 	}
 	if (in->tap) {
-		if (in_rect(in->tap_x, in->tap_y, TV_CAT_X, TV_CAT_ROW_Y, TV_CAT_W, g_tv.ncats * TV_CAT_ROW_H)) {
+		if (in_rect(in->tap_x, in->tap_y, TV_CAT_X, TV_LIST_Y, TV_CAT_W, 40)) {
+			tv_search_prompt();
+		} else if (in_rect(in->tap_x, in->tap_y, TV_CAT_X, TV_CAT_ROW_Y, TV_CAT_W, g_tv.ncats * TV_CAT_ROW_H)) {
 			int r = (in->tap_y - TV_CAT_ROW_Y) / TV_CAT_ROW_H;
-			if (r != g_tv.cat) { g_tv.cat = r; load_tools(); }
+			if (r != g_tv.cat || g_tv.searching) { g_tv.cat = r; tv_load_tools(); }
 			g_tv.on_tools = false;
 		} else if (in_rect(in->tap_x, in->tap_y, TV_TOOL_X, TV_TOOL_ROW_Y, TV_TOOL_W, TV_TOOL_ROWS * TV_TOOL_ROW_H)) {
 			int r = g_tv.tool_scroll + (in->tap_y - TV_TOOL_ROW_Y) / TV_TOOL_ROW_H;
@@ -286,9 +305,9 @@ void gcse_show_cat(int cat)
 	if (cat < 0 || cat >= g_tv.ncats)
 		return;
 	g_tv.page = TV_LIST;
-	if (cat != g_tv.cat) {
+	if (cat != g_tv.cat || g_tv.searching) {
 		g_tv.cat = cat;
-		load_tools();
+		tv_load_tools();
 	}
 	g_tv.on_tools = false;
 }

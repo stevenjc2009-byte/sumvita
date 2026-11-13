@@ -175,8 +175,8 @@ static void pan(double dpx, double dpy)
 static void list_update(const input_t *in)
 {
 	static const Hint hints[] = {
-		{ GLYPH_DPAD, "Choose" },     { GLYPH_CONFIRM, "Edit" },   { GLYPH_TRIANGLE, "Show / hide" },
-		{ GLYPH_SQUARE, "Clear" },    { GLYPH_START, "To graph" }, { GLYPH_LR, "Mode" },
+		{ GLYPH_DPAD, "Choose" },     { GLYPH_CONFIRM, "Type function" },   { GLYPH_TRIANGLE, "Show / hide" },
+		{ GLYPH_SQUARE, "Clear row" },    { GLYPH_START, "Plot" }, { GLYPH_LR, "Mode" },
 	};
 	app_hints(hints, 6);
 	if (in->pressed & IN_UP) g_gs.sel = (g_gs.sel + G_NFN - 1) % G_NFN;
@@ -242,7 +242,7 @@ static void plot_update(const input_t *in)
 {
 	static const Hint h_plot[] = {
 		{ GLYPH_DPAD, "Pan" },         { GLYPH_LR, "Zoom" },      { GLYPH_SQUARE, "Reset" },
-		{ GLYPH_CONFIRM, "Analyse" }, { GLYPH_TRIANGLE, "Trace" }, { GLYPH_START, "Table" },
+		{ GLYPH_CONFIRM, "Roots & turning points" }, { GLYPH_TRIANGLE, "Trace" }, { GLYPH_START, "Table" },
 		{ GLYPH_BACK, "Functions" },
 	};
 	static const Hint h_trace[] = {

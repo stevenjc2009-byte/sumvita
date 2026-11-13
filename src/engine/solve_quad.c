@@ -1,25 +1,9 @@
 /* Quadratics a x^2 + b x + c = 0: square-rooting (no x term), factorising
  * (rational roots), otherwise the quadratic formula with exact simplified surds
  * and a decimal line. */
-#include "solve_int.h"
+#include "solve_ext.h"
 #include <math.h>
 #include <string.h>
-
-static void add_pair(SvRoots *R, Rat A, Rat B, int64_t m)
-{
-    if (R->n + 2 > SV_MAXROOTS) return;
-    SvRoot *r = &R->r[R->n];
-    memset(r, 0, 2 * sizeof *r);
-    r[0].exact = r[1].exact = true;
-    r[0].A = r[1].A = A;
-    r[0].B = B;
-    r[1].B = rat_neg(B);
-    r[0].m = r[1].m = m;
-    r[0].pm_next = true;
-    r[0].v = sv_root_val(&r[0]);
-    r[1].v = sv_root_val(&r[1]);
-    R->n += 2;
-}
 
 static void decimals(SvCtx *c, const SvRoots *R, int from)
 {
@@ -108,7 +92,7 @@ static bool by_square_root(SvCtx *c, Rat a, Rat k, SvRoots *R)
     }
     if (!sv_sqrt_split(q, &s, &m)) return false;
     int from = R->n;
-    add_pair(R, rat_int(0), s, m);
+    sv_add_pair(R, rat_int(0), s, m);
     sv_step(c, "Square root both sides", "Remember the negative square root as well.",
             ex_print(ex_rel(R_EQ, x, sv_surd_expr(rat_int(0), s, m, true))));
     if (m > 1) decimals(c, R, from);
@@ -145,7 +129,7 @@ static bool by_formula(SvCtx *c, Rat a, Rat b, Rat k, Rat D, SvRoots *R)
     sv_step(c, "Simplify", NULL, l1);
     if (!sv_sqrt_split(D, &s, &m) || !rat_div(rat_neg(b), two_a, &Aq) || !rat_div(s, two_a, &Bq)) return false;
     int from = R->n;
-    add_pair(R, Aq, Bq, m);
+    sv_add_pair(R, Aq, Bq, m);
     const char *l2 = ex_print(ex_rel(R_EQ, ex_var(v), sv_surd_expr(Aq, Bq, m, true)));
     if (strcmp(l1, l2) != 0) {
         const char *note = rat_is_one(s) ? NULL

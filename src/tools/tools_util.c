@@ -201,8 +201,8 @@ static double round_dp_d(double x, int dp)
 
 const char *tu_dp(double x, int dp)
 {
-    char b[96];
-    if (!isfinite(x)) return astrdup("0");
+    char b[400];
+    if (!isfinite(x)) return astrdup("too big");
     if (dp < 0) dp = 0;
     if (dp > 12) dp = 12;
     snprintf(b, sizeof b, "%.*f", dp, round_dp_d(x, dp));
@@ -227,8 +227,9 @@ double tu_rsf(double x, int sf)
 
 const char *tu_sf(double x, int sf)
 {
-    char b[96];
-    if (x == 0 || !isfinite(x)) return astrdup("0");
+    char b[400];
+    if (!isfinite(x)) return astrdup("too big");
+    if (x == 0) return astrdup("0");
     if (sf < 1) sf = 1;
     double r = tu_rsf(x, sf);
     int mag = (int)floor(log10(fabs(r)));
@@ -242,11 +243,20 @@ const char *tu_sf(double x, int sf)
 
 const char *tu_w(double x) { return tu_sf(x, 6); }
 
+/* working value that keeps the whole-number digits of big values (>= 1e5): 6 s.f. below that */
+const char *tu_wx(double x)
+{
+    if (!isfinite(x) || fabs(x) < 1e5) return tu_w(x);
+    int sf = (int)floor(log10(fabs(x))) + 3;
+    return tu_sf(x, sf > 15 ? 15 : sf);
+}
+
 /* x to sf significant figures. Trailing zeros are kept when rounding changed the value
  * (12.99 to 3 s.f. is 13.0, not 13); an exact value stays plain (5, not 5.00). */
 static const char *sf_keep(double x, int sf)
 {
-    if (x == 0 || !isfinite(x)) return astrdup("0");
+    if (!isfinite(x)) return astrdup("too big");
+    if (x == 0) return astrdup("0");
     if (sf < 1) sf = 1;
     double r = tu_rsf(x, sf);
     if (fabs(r - x) <= 1e-9 * fabs(x)) return tu_sf(x, sf);
@@ -309,7 +319,7 @@ const char *tu_unit_pow(const char *unit, int pow)
 
 static const char *coef_str(double a)   /* a >= 0 */
 {
-    if (fabs(a - round(a)) < 1e-9) return asprintf_a("%lld", (long long)llround(a));
+    if (a < 9e18 && fabs(a - round(a)) < 1e-9) return asprintf_a("%lld", (long long)llround(a));
     Rat r;
     if (rat_from_double(a, 100000, &r)) return asprintf_a("(%lld/%lld)", (long long)r.n, (long long)r.d);
     return tu_w(a);
@@ -317,7 +327,7 @@ static const char *coef_str(double a)   /* a >= 0 */
 
 const char *tu_pi(double coef)
 {
-    if (!isfinite(coef) || coef == 0) return NULL;
+    if (!isfinite(coef) || coef == 0 || fabs(coef) >= 9e18) return NULL;
     double a = fabs(coef);
     const char *sg = coef < 0 ? "-" : "";
     if (fabs(a - round(a)) < 1e-9) {

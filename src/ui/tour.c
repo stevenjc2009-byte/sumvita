@@ -12,6 +12,7 @@
 #include "ui/calcview_int.h"
 #include "ui/history.h"
 #include "ui/log.h"
+#include "ui/perf.h"
 #include "ui/settings.h"
 #include "ui/tour_int.h"
 #include "ui/tools_view_int.h"
@@ -161,6 +162,8 @@ static bool shot_tick(void)
 	int t = g_shot_t++;
 	if (t == SETTLE) {
 		sceIoRemove(ACK_FILE);
+		perf_frame_t pf = perf_last();
+		log_printf("PERF %s draws=%u glyphs=%u cpu_us=%u", g_shot, pf.draws, pf.glyphs, pf.cpu_us);
 		log_printf("TOUR shot %s", g_shot);
 	} else if (t > SETTLE && ((t - SETTLE) % 4 == 0 && ack_seen())) {
 		g_shot_t = 0;

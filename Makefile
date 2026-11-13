@@ -10,7 +10,7 @@ SIZE    := $(PREFIX)-size
 
 TITLE    := Sumvita
 TITLE_ID := SUMV00001
-APP_VER  := 01.10
+APP_VER  := 01.20
 TARGET   := sumvita
 VPK_NAME := Sumvita.vpk
 BUILD    ?= build
@@ -45,6 +45,13 @@ LIBS := -lvita2d -lfreetype -lbz2 -lpng16 -lz -lm \
         -lScePgf_stub -lScePvf_stub -lSceKernelDmacMgr_stub -lScePower_stub -lSceRtc_stub \
         -lc
 
+# Count every vita2d draw call per frame (src/ui/perf.c); logged with each tour shot
+PERF_WRAP := $(foreach f,draw_line draw_rectangle draw_fill_circle draw_array draw_texture_scale draw_texture_tint_part_scale,-Wl,--wrap=vita2d_$(f))
+
+# __sce_headroom: vita-elf-create appends ~2.5 KB of SCE data after the code segment and
+# fails ("segment 1 overlaps") when the code ends just under a 64 KB boundary. The SDK
+# linker script reserves this much gap before the data segment (armelf.x).
+
 # Files packed into the VPK next to eboot.bin (app0:...)
 VPK_FILES := -s $(BUILD)/param.sfo \
 	-b $(BUILD)/eboot.bin \
@@ -67,7 +74,7 @@ $(BUILD)/$(TARGET).velf: $(BUILD)/$(TARGET).elf
 	$(VITASDK)/bin/vita-elf-create $< $@
 
 $(BUILD)/$(TARGET).elf: $(OBJS)
-	$(CC) -Wl,-q $(OBJS) $(LIBS) -o $@
+	$(CC) -Wl,-q -Wl,--defsym=__sce_headroom=0x4000 $(PERF_WRAP) $(OBJS) $(LIBS) -o $@
 
 $(BUILD)/param.sfo:
 	@mkdir -p $(BUILD)

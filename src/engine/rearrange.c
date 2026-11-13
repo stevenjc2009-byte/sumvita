@@ -4,6 +4,7 @@
  * collects the subject terms and factorises it out. */
 #include "solve_int.h"
 #include "arena.h"
+#include "rearrange_tidy.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -340,11 +341,24 @@ bool alg_rearrange(const Expr *e, const char *var, Steps *st, Expr **out, char *
     int nl = rr_count(e->kids[0], var), nr = rr_count(e->kids[1], var);
     if (nl + nr == 0) return sv_fail(&c, sv_fmt("There is no %s in this formula", var));
     c.last = ex_print(e);
-    if (nl + nr > 1) return collect_pi(&c, e, out);
+    if (nl + nr > 1) {
+        if (!collect_pi(&c, e, out)) return false;
+        Expr *t = *out ? rr_tidy((*out)->kids[1]) : NULL;
+        if (t) {
+            *out = ex_rel(R_EQ, ex_var(var), t);
+            sv_step(&c, "Simplify the fraction", NULL, ex_print(*out));
+        }
+        return true;
+    }
     Rr r = { &c, c.var, ex_clone(nl ? e->kids[0] : e->kids[1]), ex_clone(nl ? e->kids[1] : e->kids[0]), nl > 0 };
     if (!peel(&r))
         return sv_fail(&c, sv_fmt("Can't make %s the subject: there is no inverse operation to undo what is done to %s",
                                   var, var));
+    Expr *tidy = rr_tidy(r.K);
+    if (tidy) {
+        r.K = tidy;
+        show(&r, "Simplify the fraction", NULL);
+    }
     if (!r.left) {
         r.left = true;
         show(&r, "Swap the sides", NULL);

@@ -15,7 +15,7 @@ typedef enum {
 	ICON_INV, ICON_COUNT
 } KeyIcon;
 typedef enum {
-	KC_NONE = 0, KC_AC, KC_DEL, KC_LEFT, KC_RIGHT, KC_EQ, KC_SD, KC_OSK, KC_DEGRAD, KC_CLOSE, KC_OK
+	KC_NONE = 0, KC_AC, KC_DEL, KC_LEFT, KC_RIGHT, KC_EQ, KC_SD, KC_OSK, KC_DEGRAD, KC_CLOSE, KC_OK, KC_MORE
 } KeyCmd;
 
 typedef struct {
@@ -32,9 +32,12 @@ typedef struct {
 	int cols, rows;
 } Keyset;
 
-enum { KS_CALC = 0, KS_SCI, KS_ALG, KS_ENTRY, KS_COUNT };
+/* KS_NUMBER / KS_LIST: the big-key pads of the field sheet (plain number, comma list) */
+enum { KS_CALC = 0, KS_SCI, KS_ALG, KS_ENTRY, KS_NUMBER, KS_LIST, KS_COUNT };
 
 const Keyset *keyset_get(int id);
+/* sheet.c: the keypad the next sheet_open uses (KS_ENTRY unless set; one use) */
+void sheet_set_keyset(int id);
 
 void keypad_rect(const Keyset *ks, int x, int y, int w, int h, int idx, int *kx, int *ky, int *kw, int *kh);
 int  keypad_hit(const Keyset *ks, int x, int y, int w, int h, int tx, int ty);

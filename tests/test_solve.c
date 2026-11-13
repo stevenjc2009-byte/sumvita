@@ -145,7 +145,7 @@ static void nonpoly(void)
     EQ("2+3=5", "\"true\"", 0);
     EQ("2+2=5", "\"false\"", 0);
     EQ("x/(x-1)=2", "x=2", 1);
-    EQ("1/(x-2)=1/(x-2)+1", "\"no real solutions\"", 0);
+    EQ("1/(x-2)=1/(x-2)+1", "\"no solution\"", 0);
 }
 
 static void inequalities(void)

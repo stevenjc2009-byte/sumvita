@@ -1,5 +1,5 @@
 /* Small helpers shared by the solve files: steps, display, surds, root sets. */
-#include "solve_int.h"
+#include "solve_ext.h"
 #include "arena.h"
 #include <math.h>
 #include <stdarg.h>
@@ -180,6 +180,22 @@ void sv_add_rat(SvRoots *R, Rat v)
     memset(r, 0, sizeof *r);
     r->exact = true; r->A = v; r->B = rat_int(0); r->m = 1;
     r->v = rat_to_double(v);
+}
+
+void sv_add_pair(SvRoots *R, Rat A, Rat B, int64_t m)
+{
+    if (R->n + 2 > SV_MAXROOTS) return;
+    SvRoot *r = &R->r[R->n];
+    memset(r, 0, 2 * sizeof *r);
+    r[0].exact = r[1].exact = true;
+    r[0].A = r[1].A = A;
+    r[0].B = B;
+    r[1].B = rat_neg(B);
+    r[0].m = r[1].m = m;
+    r[0].pm_next = true;
+    r[0].v = sv_root_val(&r[0]);
+    r[1].v = sv_root_val(&r[1]);
+    R->n += 2;
 }
 
 void sv_add_real(SvRoots *R, double v)

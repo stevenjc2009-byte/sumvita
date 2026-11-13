@@ -1,7 +1,7 @@
 /* Numeric root finding on doubles: polynomials (roots bracketed between the
  * turning points, found recursively from the derivative) and general one-variable
  * expressions (scan + bisection, plus touching roots via a minimum search). */
-#include "solve_int.h"
+#include "solve_ext.h"
 #include <math.h>
 
 static double peval(const double *a, int d, double x)
@@ -126,30 +126,57 @@ static bool touch(Fn *F, double a, double b, double *root)
     return fe(F, *root, &fc) && fabs(fc) < 1e-10;
 }
 
-int sv_expr_roots(SvCtx *c, const Expr *f, double *out, int max)
+/* near-equal roots (relative 1e-6) are one root: keep the one that fits f better */
+static int add_rootf(Fn *F, double *out, int n, int max, double x)
+{
+    for (int i = 0; i < n; i++) {
+        if (fabs(out[i] - x) > 1e-6 * fmax(1.0, fabs(x))) continue;
+        double a, b;
+        if (fe(F, x, &a) && fe(F, out[i], &b) && fabs(a) < fabs(b)) out[i] = x;
+        return n;
+    }
+    if (n < max) out[n++] = x;
+    return n;
+}
+
+/* lo < hi: uniform scan of [lo, hi]; otherwise the wide scan of the whole real line */
+static int scan(SvCtx *c, const Expr *f, double lo, double hi, double *out, int max)
 {
     Fn F = { f, { 0 } };
     F.env.degrees = c->s ? c->s->degrees : true;
     F.env.var_names[0] = c->var;
     F.env.nvars = 1;
-    int n = 0, total = N1 + N2 + N3;
-    double x0 = grid(0), y0 = 0, xp = 0, yp = 0;
+    bool rng = hi > lo;
+    int n = 0, total = rng ? N2 : N1 + N2 + N3;
+#define GRID(i) (rng ? lo + (hi - lo) * (i) / total : grid(i))
+    double x0 = GRID(0), y0 = 0, xp = 0, yp = 0;
     bool v0 = fe(&F, x0, &y0), vp = false;
     for (int i = 1; i <= total && n < max; i++) {
-        double x1 = grid(i), y1, r;
+        double x1 = GRID(i), y1, r;
         bool v1 = fe(&F, x1, &y1);
-        if (v0 && y0 == 0) n = add_root(out, n, max, x0);
+        if (v0 && y0 == 0) n = add_rootf(&F, out, n, max, x0);
         if (v0 && v1 && ((y0 < 0 && y1 > 0) || (y0 > 0 && y1 < 0)) && bisect_fn(&F, x0, x1, y0, &r)) {
             double fr;
-            if (fe(&F, r, &fr) && fabs(fr) < 1e-6) n = add_root(out, n, max, r);
+            if (fe(&F, r, &fr) && fabs(fr) < 1e-6) n = add_rootf(&F, out, n, max, r);
         }
         if (vp && v0 && v1 && fabs(y0) < fabs(yp) && fabs(y0) <= fabs(y1) && fabs(y0) < 1e-3 &&
             (yp > 0) == (y0 > 0) && (y1 > 0) == (y0 > 0) && touch(&F, xp, x1, &r))
-            n = add_root(out, n, max, r);
+            n = add_rootf(&F, out, n, max, r);
         xp = x0; yp = y0; vp = v0;
         x0 = x1; y0 = y1; v0 = v1;
     }
-    if (v0 && y0 == 0) n = add_root(out, n, max, x0);
+#undef GRID
+    if (v0 && y0 == 0) n = add_rootf(&F, out, n, max, x0);
     sort_d(out, n);
     return n;
+}
+
+int sv_expr_roots(SvCtx *c, const Expr *f, double *out, int max)
+{
+    return scan(c, f, 0, 0, out, max);
+}
+
+int sv_expr_roots_range(SvCtx *c, const Expr *f, double lo, double hi, double *out, int max)
+{
+    return scan(c, f, lo, hi, out, max);
 }

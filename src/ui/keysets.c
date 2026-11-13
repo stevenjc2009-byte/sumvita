@@ -40,6 +40,9 @@
 #define K_EQ     CMD("=", KC_EQ, KST_EQ)
 #define K_SD     CMD(SD, KC_SD, KST_FN)
 #define K_OSK    CMD(KBD, KC_OSK, KST_FN)
+#define K_MORE   CMD("more", KC_MORE, KST_FN)
+#define K_OK     CMD("OK", KC_OK, KST_EQ)
+#define REL(l)   T(l, KST_LETTER)   /* = < > <= >= : a sign in the maths, not "work it out" */
 #define K_DEG    CMD("DEG", KC_DEGRAD, KST_FN)
 #define K_ANS    TI("Ans", KST_FN, "Ans")
 #define K_MINUS  TI(MINUS, KST_OP, MINUS)
@@ -68,12 +71,12 @@ static const Key k_sci[] = {
 
 static const Key k_alg[] = {
 	T("x", KST_LETTER), T("y", KST_LETTER), T("a", KST_LETTER), T("b", KST_LETTER), T("c", KST_LETTER), K_OSK,
-	OP("="), OP("<"), OP(">"), OP("\xE2\x89\xA4"), OP("\xE2\x89\xA5"), OP(","),
+	REL("="), REL("<"), REL(">"), REL("\xE2\x89\xA4"), REL("\xE2\x89\xA5"), OP(","),
 	K_SQ, K_POW, K_SQRT, K_FRAC, K_OPEN, K_CLOSE,
 	D("7"), D("8"), D("9"), K_TIMES, K_DIVIDE, K_AC,
 	D("4"), D("5"), D("6"), OP("+"), K_MINUS, K_DEL,
 	D("1"), D("2"), D("3"), K_LEFT, K_RIGHT, T("n", KST_LETTER),
-	D("0"), D("."), TI(PI, KST_FN, PI), K_ANS, T("k", KST_LETTER), K_EQ,
+	D("0"), D("."), TI(PI, KST_FN, PI), K_ANS, T("k", KST_LETTER), CMD("Go", KC_EQ, KST_EQ),
 };
 
 static const Key k_entry[] = {
@@ -87,11 +90,29 @@ static const Key k_entry[] = {
 	D("0"), D("."), K_TEN, OP("%"), OP("\xC2\xB0"), CMD("OK", KC_OK, KST_EQ),
 };
 
+/* the field sheet's big-key pads: a plain number, and a comma separated list.
+ * "more" swaps to the full entry keypad (sheet.c). */
+static const Key k_number[] = {
+	D("7"), D("8"), D("9"), K_DEL, K_AC,
+	D("4"), D("5"), D("6"), K_MINUS, K_FRAC,
+	D("1"), D("2"), D("3"), D("."), K_DIVIDE,
+	D("0"), K_LEFT, K_RIGHT, K_MORE, K_OK,
+};
+
+static const Key k_list[] = {
+	D("7"), D("8"), D("9"), K_DEL, K_AC,
+	D("4"), D("5"), D("6"), K_MINUS, OP(","),
+	D("1"), D("2"), D("3"), D("."), K_FRAC,
+	D("0"), K_LEFT, K_RIGHT, K_MORE, K_OK,
+};
+
 static const Keyset k_sets[KS_COUNT] = {
 	{ k_calc, 5, 6 },
 	{ k_sci, 6, 8 },
 	{ k_alg, 6, 7 },
 	{ k_entry, 6, 8 },
+	{ k_number, 5, 4 },
+	{ k_list, 5, 4 },
 };
 
 const Keyset *keyset_get(int id)

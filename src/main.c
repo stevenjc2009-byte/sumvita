@@ -1,4 +1,5 @@
 /* Sumvita - the ultimate calculator for PS Vita. Boot and main loop. */
+#include <psp2/display.h>
 #include <psp2/kernel/processmgr.h>
 #include <vita2d.h>
 
@@ -8,6 +9,8 @@
 #include "ui/log.h"
 #include "ui/mlayout.h"
 #include "ui/osk.h"
+#include "ui/perf.h"
+#include "ui/redraw.h"
 #include "ui/settings.h"
 #include "ui/theme.h"
 
@@ -30,6 +33,7 @@ int main(void)
 		log_printf("osk: init failed");
 	settings_load();
 	app_init();
+	log_set_sync(tour_active());
 	log_printf("ready: confirm button is %s", input_confirm_is_cross() ? "Cross" : "Circle");
 
 	input_t in;
@@ -38,14 +42,24 @@ int main(void)
 		tour_input(&in);
 		app_update(&in);
 		mlc_new_frame();
+		log_tick();
+		/* ---- idle skip (v1.2): nothing can have changed, so keep the last frame ---- */
+		if (!redraw_needed(&in)) {
+			sceDisplayWaitVblankStart();
+			continue;
+		}
+		/* ---- end idle skip ---- */
 		vita2d_start_drawing();
 		vita2d_clear_screen();
+		perf_frame_begin();
 		app_draw();
+		perf_frame_end();
 		vita2d_end_drawing();
 		vita2d_swap_buffers();
 	}
 
 	log_printf("exit");
+	log_close();
 	osk_shutdown();
 	/* no vita2d_fini(): it hangs on Vita3K, and the process is going anyway */
 	sceKernelExitProcess(0);

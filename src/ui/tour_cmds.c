@@ -4,6 +4,7 @@
  *   osk TEXT                         as if TEXT was accepted on the system keyboard
  *   rearrange VAR                    rearrange for VAR
  *   steps / close                    open the working of the current answer / close overlays
+ *   help N                           close overlays, open Help at page N (1 = first)
  *   focus editor|keypad|history|actions,  alt 0|1 (show the S<->D form)
  *   press BTN [N], key INDEX         virtual buttons; key = d-pad to keypad INDEX, then confirm
  *   tap X Y, drag X Y DY FRAMES, wait FRAMES
@@ -11,6 +12,7 @@
  *   set deg|dp|sf|exact V            settings (restored when the tour ends)
  *   graph I TEXT, gview 0-3, gsel I  graph functions / plot, analysis, table, trace
  *   tool ID, field I TEXT, run, gcat I   GCSE tools
+ *   gsearch TEXT                     GCSE search ("" clears)
  *   hist_clear, mem LABEL, stress N, log TEXT, end */
 #include "ui/app.h"
 
@@ -171,6 +173,9 @@ static int other_cmd(const char *cmd, const char *arg)
 		else if (app_mode() == MODE_GCSE && g_tv.has_res) app_open_steps(&g_tv.res);
 	} else if (!strcmp(cmd, "close")) {
 		app_close_overlays();
+	} else if (!strcmp(cmd, "help")) {
+		app_close_overlays();
+		app_open_help(atoi(arg) - 1);
 	} else if (!strcmp(cmd, "set")) {
 		char k[8] = { 0 };
 		int v = 0;
@@ -198,6 +203,8 @@ static int other_cmd(const char *cmd, const char *arg)
 		gcse_run();
 	} else if (!strcmp(cmd, "gcat")) {
 		gcse_show_cat(atoi(arg));
+	} else if (!strcmp(cmd, "gsearch")) {
+		gcse_search(arg);
 	} else if (!strcmp(cmd, "hist_clear")) {
 		history_clear();
 	} else if (!strcmp(cmd, "mem")) {

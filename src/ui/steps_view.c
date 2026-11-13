@@ -29,7 +29,14 @@
 
 static Res g_r;
 static bool g_has;
-static int *g_h;        /* card heights */
+/* Wrapped once when the view opens: text_wrap is O(L^2), too slow per frame. */
+typedef struct {
+	int h;                          /* card height */
+	int nl;                         /* note lines */
+	char title[TEXT_LINE_MAX];      /* ellipsized to the card */
+	char note[3][TEXT_LINE_MAX];
+} SvCard;
+static SvCard *g_c;
 static int g_total;
 static float g_scroll;
 static int g_head = SV_HEAD;
@@ -40,26 +47,25 @@ static int card_w(int depth)
 	return SV_W - 70 - depth * SV_INDENT;
 }
 
-static int note_lines(const RStep *s, int w, char lines[][TEXT_LINE_MAX])
-{
-	if (!s->note || !s->note[0])
-		return 0;
-	return text_wrap(SV_NOTE_PX, s->note, w, 3, lines);
-}
-
-static int card_h(const RStep *s)
+/* wrap and ellipsize one step's text and measure its card */
+static void card_build(const RStep *s, SvCard *c)
 {
 	int w = card_w(s->depth) - 28;
-	char lines[3][TEXT_LINE_MAX];
 	int h = 12;
-	if (s->title && s->title[0])
+	c->title[0] = 0;
+	c->nl = 0;
+	if (s->title && s->title[0]) {
+		text_ellipsize(SV_TITLE_PX, s->title, w, c->title);
 		h += font_height(SV_TITLE_PX) + 2;
-	h += note_lines(s, w, lines) * (font_height(SV_NOTE_PX) + 1);
+	}
+	if (s->note && s->note[0])
+		c->nl = text_wrap(SV_NOTE_PX, s->note, w, 3, c->note);
+	h += c->nl * (font_height(SV_NOTE_PX) + 1);
 	if (s->math && s->math[0]) {
 		const MLayout *l = mlc_fit(s->math, SV_MATH_PX, 14, w);
 		h += 6 + l->asc + l->desc;
 	}
-	return h + 12;
+	c->h = h + 12;
 }
 
 static int final_h(void) { return g_final_h; }
@@ -77,8 +83,8 @@ void steps_view_open(const Res *r)
 	res_free(&g_r);
 	res_clone(&g_r, r);
 	g_has = true;
-	free(g_h);
-	g_h = calloc((size_t)(g_r.nsteps + 1), sizeof(int));
+	free(g_c);
+	g_c = calloc((size_t)(g_r.nsteps + 1), sizeof(SvCard));
 	/* header and answer card sized from their real maths height: a fraction
 	 * echo used to cross the header rule, a fraction answer the card edge */
 	const MLayout *e = echo_layout();
@@ -94,8 +100,8 @@ void steps_view_open(const Res *r)
 	}
 	g_total = 0;
 	for (int i = 0; i < g_r.nsteps; i++) {
-		g_h[i] = card_h(&g_r.steps[i]);
-		g_total += g_h[i] + SV_GAP;
+		card_build(&g_r.steps[i], &g_c[i]);
+		g_total += g_c[i].h + SV_GAP;
 	}
 	g_total += final_h();
 	g_scroll = 0;
@@ -110,12 +116,11 @@ static float max_scroll(void)
 bool steps_view_update(const input_t *in)
 {
 	static const Hint hints[] = {
-		{ GLYPH_DPAD, "Scroll" },
-		{ GLYPH_STICK_R, "Scroll" },
-		{ GLYPH_TOUCH, "Drag" },
-		{ GLYPH_BACK, "Close" },
+		{ -1, "\xE2\x96\xB2\xE2\x96\xBC Scroll" },
+		{ GLYPH_BACK, "/" },
+		{ GLYPH_TRIANGLE, "Close" },
 	};
-	app_hints(hints, 4);
+	app_hints(hints, 3);
 	if (in->pressed & (IN_BACK | IN_TRIANGLE))
 		return false;
 	if (in->tap && !in_rect(in->tap_x, in->tap_y, SV_X, SV_Y, SV_W, SV_H))
@@ -138,10 +143,11 @@ bool steps_view_update(const input_t *in)
 	return true;
 }
 
-static void draw_card(const RStep *s, int idx, int y, int h)
+static void draw_card(const RStep *s, const SvCard *c, int idx, int y)
 {
 	int x = SV_X + 54 + s->depth * SV_INDENT;
 	int w = card_w(s->depth);
+	int h = c->h;
 	draw_rrect(x, y, w, h, 12, s->depth ? COL_PANEL : COL_PANEL2);
 	/* timeline dot + number */
 	int cx = SV_X + 28 + s->depth * SV_INDENT;
@@ -155,16 +161,12 @@ static void draw_card(const RStep *s, int idx, int y, int h)
 	}
 	int ty = y + 12;
 	int inner = w - 28;
-	if (s->title && s->title[0]) {
-		char line[TEXT_LINE_MAX];
-		text_ellipsize(SV_TITLE_PX, s->title, inner, line);
-		font_draw_w(FW_BOLD, x + 14, ty, COL_TEXT, SV_TITLE_PX, line);
+	if (c->title[0]) {
+		font_draw_w(FW_BOLD, x + 14, ty, COL_TEXT, SV_TITLE_PX, c->title);
 		ty += font_height(SV_TITLE_PX) + 2;
 	}
-	char lines[3][TEXT_LINE_MAX];
-	int nl = note_lines(s, inner, lines);
-	for (int i = 0; i < nl; i++) {
-		font_draw(x + 14, ty, COL_MUTED, SV_NOTE_PX, lines[i]);
+	for (int i = 0; i < c->nl; i++) {
+		font_draw(x + 14, ty, COL_MUTED, SV_NOTE_PX, c->note[i]);
 		ty += font_height(SV_NOTE_PX) + 1;
 	}
 	if (s->math && s->math[0]) {
@@ -215,11 +217,11 @@ void steps_view_draw(void)
 		draw_rect(SV_X + 27, y + 20, 2, g_total - final_h() - 10, COL_LINE_SOFT);
 	int num = 0;   /* numbers count the top-level steps only */
 	for (int i = 0; i < g_r.nsteps; i++) {
-		int h = g_h[i];
+		int h = g_c[i].h;
 		if (g_r.steps[i].depth == 0)
 			num++;
 		if (y + h > SV_LIST_Y && y < SV_LIST_Y + SV_LIST_H)
-			draw_card(&g_r.steps[i], num, y, h);
+			draw_card(&g_r.steps[i], &g_c[i], num, y);
 		y += h + SV_GAP;
 	}
 	if (g_r.nsteps == 0)

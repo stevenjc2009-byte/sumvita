@@ -1,35 +1,48 @@
 /* Equations that are not polynomials: unknown in a denominator, √(...) = k,
  * b^(...) = k by matching powers (or logs), otherwise solved numerically. */
-#include "solve_int.h"
+#include "solve_ext.h"
 #include <math.h>
 #include <string.h>
 
 bool sv_numeric_fallback(SvCtx *c, const Expr *L, const Expr *R, const char *why, Expr **out)
 {
     Expr *f = ex_add2(ex_clone(L), ex_neg(ex_clone(R)));
-    double roots[SV_MAXROOTS];
-    int n = sv_expr_roots(c, f, roots, SV_MAXROOTS);
-    SvRoots Rt;
-    memset(&Rt, 0, sizeof Rt);
-    for (int i = 0; i < n; i++) sv_add_real(&Rt, roots[i]);
+    bool trig = sv_has_trig(f, c->var), deg = c->s ? c->s->degrees : true;
+    double top = deg ? 360 : 2 * M_PI, roots[SV_MAXROOTS];
+    int n = trig ? sv_expr_roots_range(c, f, 0, top, roots, SV_MAXROOTS) : sv_expr_roots(c, f, roots, SV_MAXROOTS);
+    if (trig) {      /* angles from 0 up to (not including) a full turn */
+        int m = 0;
+        for (int i = 0; i < n; i++)
+            if (roots[i] < top - 1e-9 * top) roots[m++] = fabs(roots[i]) < 1e-9 ? 0 : roots[i];
+        n = m;
+    }
+    bool huge = n > 6;
+    for (int i = 0; i < n; i++) huge = huge || fabs(roots[i]) > 1e6;
+    if (huge) return sv_fail(c, "I couldn't solve this equation.");
+    const char *list = "";
+    Expr *items[SV_MAXROOTS];
+    for (int i = 0; i < n; i++) {
+        items[i] = ex_rel(R_EQ, ex_var(c->var), sv_numexpr(c, roots[i]));
+        list = i ? sv_fmt("%s \"or\" %s", list, ex_print(items[i])) : ex_print(items[i]);
+    }
     sv_step(c, "Solve numerically",
-            why ? why : "This equation can't be solved exactly by rearranging, so it was solved numerically.",
-            n ? sv_or_list(c, &Rt, true) : NULL);
+            why ? why : trig ? (deg ? "This equation can't be solved exactly, so it was solved numerically for 0 â¤ x < 360."
+                                    : "This equation can't be solved exactly, so it was solved numerically for 0 â¤ x < 2Ï.")
+                             : "This equation can't be solved exactly by rearranging, so it was solved numerically.",
+            n ? list : NULL);
     if (n == 0) {
-        sv_step(c, "No solutions found", "No real solutions between -1000000 and 1000000.", NULL);
+        sv_step(c, "No solutions found", trig ? "No solutions found between 0 and a full turn."
+                                              : "No real solutions between -1000000 and 1000000.", NULL);
         *out = ex_text("no real solutions found");
         return true;
     }
-    *out = sv_answer(c, &Rt);
+    *out = n == 1 ? items[0] : ex_node(E_LIST, n, items);
     return true;
 }
 
 static bool exact_num(const Expr *e, Rat *r)
 {
-    Expr *s = ex_simplify(e);
-    if (!s || s->kind != E_NUM) return false;
-    *r = s->r;
-    return true;
+    return sv_exact_num(e, r);
 }
 
 /* b = base^i with i as large as possible (base not itself a perfect power) */
@@ -88,9 +101,32 @@ static bool powers(SvCtx *c, const Expr *F, const Expr *K, Expr **out)
     sv_step(c, "Take logs of both sides", sv_fmt("log(%s,%s) means the power of %s that gives %s.",
             sv_rat_str(b), sv_rat_str(k), sv_rat_str(b), sv_rat_str(k)),
             ex_print(ex_rel(R_EQ, ex_clone(h), ex_func2(F_LOG, ex_num(b), ex_num(k)))));
-    sv_step(c, "Solve", NULL, sv_fmt("%s=%s", c->var, sv_dec(x, sv_dp(c) > 4 ? sv_dp(c) : 4)));
-    *out = ex_rel(R_EQ, ex_var(c->var), sv_real(x));
+    sv_step(c, "Solve", NULL, sv_fmt("%s=%s", c->var, sv_numdec(c, x)));
+    *out = ex_rel(R_EQ, ex_var(c->var), sv_numexpr(c, x));
     return true;
+}
+
+/* b1^f = b2^g where both bases are powers of one number: equate the powers */
+static bool same_base(SvCtx *c, const Expr *L, const Expr *R, Expr **out)
+{
+    Rat b1, b2, base1, base2;
+    int i1, i2;
+    if (L->kind != E_POW || R->kind != E_POW || ex_has_var(L->kids[0], c->var) || ex_has_var(R->kids[0], c->var)) return false;
+    if (!exact_num(L->kids[0], &b1) || !exact_num(R->kids[0], &b2)) return false;
+    if (rat_cmp(b1, rat_int(0)) <= 0 || rat_cmp(b2, rat_int(0)) <= 0 || rat_is_one(b1) || rat_is_one(b2)) return false;
+    root_base(b1, &base1, &i1);
+    root_base(b2, &base2, &i2);
+    if (!rat_eq(base1, base2)) return false;
+    Expr *e1 = ex_clone(L->kids[1]), *e2 = ex_clone(R->kids[1]);
+    e1->flags &= ~(unsigned)EF_PAREN;
+    e2->flags &= ~(unsigned)EF_PAREN;
+    Expr *h1 = i1 == 1 ? e1 : ex_mul2(ex_int(i1), e1);
+    Expr *h2 = i2 == 1 ? e2 : ex_mul2(ex_int(i2), e2);
+    if (i1 != 1 || i2 != 1)
+        sv_step(c, sv_fmt("Write both sides as powers of %s", sv_rat_str(base1)), NULL,
+                ex_print(ex_rel(R_EQ, ex_pow2(ex_num(base1), ex_clone(h1)), ex_pow2(ex_num(base1), ex_clone(h2)))));
+    sv_step(c, "The powers must be equal", "The bases are the same, so the powers are equal.", ex_print(ex_rel(R_EQ, h1, h2)));
+    return sv_equation(c, h1, h2, out);
 }
 
 bool sv_nonpoly(SvCtx *c, const Expr *L, const Expr *R, Expr **out)
@@ -98,7 +134,11 @@ bool sv_nonpoly(SvCtx *c, const Expr *L, const Expr *R, Expr **out)
     if (!sv_rational_eq(c, L, R, out)) return false;
     if (*out) return true;
     bool lv = ex_has_var(L, c->var), rv = ex_has_var(R, c->var);
-    if (lv && rv) return sv_numeric_fallback(c, L, R, NULL, out);
+    if (lv && rv) {
+        if (same_base(c, L, R, out) || sv_surd_eq(c, L, R, out)) return true;
+        return sv_numeric_fallback(c, L, R, NULL, out);
+    }
+    if (sv_trig_eq(c, L, R, out)) return true;
     const Expr *F = lv ? L : R, *K = lv ? R : L;
     if (F->kind == E_FUNC && F->op == F_SQRT && F->nkids == 1) {
         Rat k;

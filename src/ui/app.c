@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { OV_NONE = 0, OV_STEPS, OV_SHEET, OV_SETTINGS, OV_ABOUT };
+enum { OV_NONE = 0, OV_STEPS, OV_SHEET, OV_SETTINGS, OV_ABOUT, OV_HELP };
 
 #define OV_MAX 4
 
@@ -55,7 +55,8 @@ void app_hints(const Hint *h, int n)
 void app_toast(const char *msg)
 {
 	snprintf(g_toast, sizeof g_toast, "%s", msg);
-	g_toast_until = g_now + 1800;
+	/* long tips need longer to read */
+	g_toast_until = g_now + (strlen(g_toast) > 40 ? 3500 : 1800);
 }
 
 static void push(int ov)
@@ -88,6 +89,12 @@ void app_open_about(void)
 	push(OV_ABOUT);
 }
 
+void app_open_help(int page)
+{
+	help_open(page);
+	push(OV_HELP);
+}
+
 static void draw_screen(void)
 {
 	switch (g_mode) {
@@ -104,6 +111,7 @@ static void draw_overlay(int ov)
 	case OV_SHEET: sheet_draw(); break;
 	case OV_SETTINGS: settings_view_draw(); break;
 	case OV_ABOUT: about_draw(); break;
+	case OV_HELP: help_draw(); break;
 	default: break;
 	}
 }
@@ -125,6 +133,12 @@ void app_init(void)
 	gcse_screen_init();
 	osk_set_backdrop(osk_backdrop);
 	tour_start_if_requested();
+	/* first ever launch: show the Help once (not during a scripted tour) */
+	if (!g_set.seen_help && !tour_active()) {
+		g_set.seen_help = true;
+		settings_save();
+		app_open_help(0);
+	}
 }
 
 void app_update(const input_t *in)
@@ -141,6 +155,7 @@ void app_update(const input_t *in)
 		case OV_SHEET: open = sheet_update(in); break;
 		case OV_SETTINGS: open = settings_view_update(in); break;
 		case OV_ABOUT: open = about_update(in); break;
+		case OV_HELP: open = help_update(in); break;
 		default: open = false; break;
 		}
 		/* an overlay may open another one on top (settings -> about) */
@@ -174,6 +189,8 @@ void app_update(const input_t *in)
 			app_set_mode(t);
 		else if (t == MODE_COUNT)
 			app_open_settings();
+		else if (t == MODE_COUNT + 2)
+			app_open_help(0);
 		else if (t == MODE_COUNT + 1) {
 			g_set.degrees = !g_set.degrees;
 			settings_save();

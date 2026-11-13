@@ -10,7 +10,8 @@
 #include "ui/result.h"
 
 #define TV_MAX_CATS 16
-#define TV_MAX_TOOLS 64        /* tools in one category */
+#define TV_MAX_TOOLS 100       /* tools in one category, or search matches */
+#define TV_QUERY_MAX 48
 #define TV_VAL_MAX 256
 
 /* category / tool lists */
@@ -52,6 +53,8 @@ typedef struct {
 	Res res;
 	bool has_res;
 	int pressed_run;
+	bool searching;           /* the tool column shows search matches, not a topic */
+	char query[TV_QUERY_MAX];
 } ToolsState;
 
 extern ToolsState g_tv;
@@ -67,5 +70,11 @@ void gcse_set_field(int i, const char *text);
 void gcse_run(void);
 void gcse_show_cat(int cat);
 void tv_draw_form(void);
+
+/* tools_search.c */
+void tv_load_tools(void);          /* the selected topic's tools */
+void tv_search_prompt(void);       /* system keyboard, then search */
+void tv_search_clear(void);
+void gcse_search(const char *text);   /* search all topics ("" clears); also the tour */
 
 #endif

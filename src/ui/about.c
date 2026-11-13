@@ -3,6 +3,7 @@
 
 #include "ui/draw.h"
 #include "ui/font.h"
+#include "ui/settings.h"
 #include "ui/theme.h"
 
 #include <stdio.h>
@@ -51,7 +52,7 @@ void about_draw(void)
 	}
 	font_draw_c(FW_BOLD, cx, AB_Y + 132, COL_TEXT, 30, "Sumvita");
 	char ver[48];
-	snprintf(ver, sizeof ver, "Version %s", SUMVITA_VERSION);
+	snprintf(ver, sizeof ver, "Version %s", settings_version());
 	font_draw_c(FW_MED, cx, AB_Y + 170, theme_accent(), 15, ver);
 	int y = AB_Y + 206;
 	for (unsigned i = 0; i < sizeof k_lines / sizeof k_lines[0]; i++) {

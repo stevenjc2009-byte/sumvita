@@ -86,6 +86,17 @@ bool sv_rational_eq(SvCtx *c, const Expr *L, const Expr *R, Expr **out)
     }
     sv_step(c, sv_fmt("Multiply both sides by %s", bracketed(sv_pexpr(&M, c->var))), "This clears the fractions.",
             ex_print(ex_rel(R_EQ, sv_pexpr(&NL, c->var), sv_pexpr(&NR, c->var))));
+    Poly diff;
+    Rat k;
+    if (poly_sub(&NL, &NR, &diff) && poly_is_const(&diff, &k) && !rat_is_zero(k)) {
+        /* x^2+x+1=x^2+x: the letters cancel and what is left is false */
+        if (!poly_is_zero(&NR))
+            sv_step(c, sv_fmt("Subtract %s from both sides", ex_print(sv_pexpr(&NR, c->var))), NULL,
+                    ex_print(ex_rel(R_EQ, ex_num(k), ex_int(0))));
+        sv_step(c, "This is never true", sv_fmt("%s=0 is false, so there is no solution.", sv_rat_str(k)), NULL);
+        *out = ex_text("no solution");
+        return true;
+    }
     SvRoots Rt;
     memset(&Rt, 0, sizeof Rt);
     if (!sv_poly_solve(c, &NL, &NR, &Rt)) return false;
@@ -119,6 +130,6 @@ bool sv_rational_eq(SvCtx *c, const Expr *L, const Expr *R, Expr **out)
         *out = ex_text(sv_fmt("true for all values of %s where it is defined", c->var));
         return true;
     }
-    *out = sv_answer(c, &keep);
+    *out = Rt.n > 0 && keep.n == 0 ? ex_text("no solution") : sv_answer(c, &keep);
     return true;
 }

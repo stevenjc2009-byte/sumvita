@@ -15,18 +15,36 @@
 #define ST_X ((SCR_W - ST_W) / 2)
 #define ST_Y (BODY_Y + 10)
 #define ST_H (BODY_H - 20)
-#define ST_ROW_Y (ST_Y + 64)
-#define ST_ROW_H 52
+#define ST_ROW_Y (ST_Y + 56)
+#define ST_ROW_H 42
+#define ST_DESC_H 22   /* extra height under the focused row, for its description */
 
-enum { R_ANGLE = 0, R_DP, R_SF, R_EXACT, R_ACCENT, R_CLEAR, R_ABOUT, R_COUNT };
+enum { R_HELP = 0, R_ANGLE, R_DP, R_SF, R_EXACT, R_ACCENT, R_CLEAR, R_ABOUT, R_COUNT };
 
 static int g_row;
 static bool g_confirm_clear;
 
 static const char *k_labels[R_COUNT] = {
-	"Angle unit", "Decimal places", "Significant figures", "Answers", "Accent colour", "Clear history",
-	"About Sumvita",
+	"How to use Sumvita", "Angle unit", "Decimal places", "Significant figures", "Answers", "Accent colour",
+	"Clear history", "About Sumvita",
 };
+
+static const char *k_desc[R_COUNT] = {
+	"Short guide to every mode and button",
+	"Degrees or radians for sin, cos and tan",
+	"Auto = as many decimal places as needed",
+	"Off = use decimal places instead",
+	"Exact first = fractions and surds; decimal first = 0.75",
+	"The colour used for highlights",
+	"Deletes every sum in the history",
+	"Version and what Sumvita does",
+};
+
+/* top of row r when row sel is focused (rows below it move down) */
+static int row_y(int r, int sel)
+{
+	return ST_ROW_Y + r * ST_ROW_H + (r > sel ? ST_DESC_H : 0);
+}
 
 void settings_view_open(void)
 {
@@ -90,6 +108,8 @@ static void activate(int row)
 		app_toast("History cleared");
 	} else if (row == R_ABOUT) {
 		app_open_about();
+	} else if (row == R_HELP) {
+		app_open_help(0);
 	} else {
 		change(row, 1);
 	}
@@ -104,10 +124,11 @@ bool settings_view_update(const input_t *in)
 {
 	static const Hint hints[] = {
 		{ GLYPH_DPAD, "Choose" },
-		{ GLYPH_CONFIRM, "Change" },
+		{ -1, "\xE2\x97\x80 \xE2\x96\xB6 Change" },
+		{ GLYPH_CONFIRM, "Select" },
 		{ GLYPH_BACK, "Close" },
 	};
-	app_hints(hints, 3);
+	app_hints(hints, 4);
 	if (in->pressed & (IN_BACK | IN_SELECT))
 		return false;
 	int prev = g_row;
@@ -121,9 +142,10 @@ bool settings_view_update(const input_t *in)
 	if (in->tap) {
 		if (!in_rect(in->tap_x, in->tap_y, ST_X, ST_Y, ST_W, ST_H))
 			return false;
+		int sel0 = g_row;   /* the layout the tap landed on */
 		for (int r = 0; r < R_COUNT; r++) {
-			int y = ST_ROW_Y + r * ST_ROW_H;
-			if (!in_rect(in->tap_x, in->tap_y, ST_X, y, ST_W, ST_ROW_H))
+			int y = row_y(r, sel0);
+			if (!in_rect(in->tap_x, in->tap_y, ST_X, y, ST_W, ST_ROW_H + (r == sel0 ? ST_DESC_H : 0)))
 				continue;
 			if (r != g_row)
 				g_confirm_clear = false;
@@ -135,7 +157,7 @@ bool settings_view_update(const input_t *in)
 						theme_set_accent(i);
 						settings_save();
 					}
-			} else if (r <= R_EXACT) {
+			} else if (r >= R_ANGLE && r <= R_EXACT) {
 				change(r, 1);
 			} else {
 				activate(r);
@@ -155,15 +177,19 @@ void settings_view_draw(void)
 	font_draw_r(FW_REG, ST_X + ST_W - 24, ST_Y + 22, COL_DIM, 13, "Saved automatically");
 
 	for (int r = 0; r < R_COUNT; r++) {
-		int y = ST_ROW_Y + r * ST_ROW_H;
+		int y = row_y(r, g_row);
 		bool sel = r == g_row;
-		if (sel)
-			draw_rrect(ST_X + 10, y + 3, ST_W - 20, ST_ROW_H - 6, 12, theme_accent_soft());
+		if (sel) {
+			draw_rrect(ST_X + 10, y + 3, ST_W - 20, ST_ROW_H - 6 + ST_DESC_H, 12, theme_accent_soft());
+			font_draw(ST_X + 28, y + ST_ROW_H - 8, COL_MUTED, 13, k_desc[r]);
+		}
 		if (r > 0 && !sel && r - 1 != g_row)
 			draw_rect(ST_X + 24, y, ST_W - 48, 1, COL_LINE_SOFT);
 		int ty = y + (ST_ROW_H - font_height(18)) / 2;
 		unsigned int lc = r == R_CLEAR && g_confirm_clear ? COL_ERR : COL_TEXT;
-		const char *lab = r == R_CLEAR && g_confirm_clear ? "Press again to clear history" : k_labels[r];
+		const char *lab = k_labels[r];
+		if (r == R_CLEAR && g_confirm_clear)
+			lab = input_confirm_is_cross() ? "Press \xE2\x9C\x95 again to clear" : "Press \xE2\x97\x8B again to clear";
 		font_draw_w(sel ? FW_MED : FW_REG, ST_X + 28, ty, lc, 18, lab);
 		if (r == R_ACCENT) {
 			for (int i = 0; i < theme_accent_count(); i++) {
@@ -175,7 +201,7 @@ void settings_view_draw(void)
 			}
 			continue;
 		}
-		if (r >= R_CLEAR) {
+		if (r == R_HELP || r >= R_CLEAR) {
 			font_draw_r(FW_REG, ST_X + ST_W - 30, ty, COL_DIM, 18, "\xE2\x80\xBA");
 			continue;
 		}
@@ -187,6 +213,6 @@ void settings_view_draw(void)
 		font_draw_r(FW_MED, ST_X + ST_W - 40 - aw, ty, sel ? theme_accent() : COL_TEXT2, 18, v);
 	}
 	char ver[48];
-	snprintf(ver, sizeof ver, "Sumvita %s", SUMVITA_VERSION);
-	font_draw_c(FW_REG, ST_X + ST_W / 2, ST_Y + ST_H - 26, COL_DIM, 13, ver);
+	snprintf(ver, sizeof ver, "Sumvita %s", settings_version());
+	font_draw_c(FW_REG, ST_X + ST_W / 2, ST_Y + ST_H - 24, COL_DIM, 13, ver);
 }

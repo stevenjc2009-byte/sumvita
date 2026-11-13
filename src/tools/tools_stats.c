@@ -11,6 +11,13 @@ static void sort_d(double *a, int n)
     }
 }
 
+/* mean or similar in the answer: tool default s.f. unless that would round whole digits off */
+static const char *ansv(double x, const CalcSettings *s)
+{
+    if (fabs(x) >= 1000 && s->dp < 0 && s->sf <= 0) return tu_wx(x);
+    return tu_f(x, s, 4, -1);
+}
+
 static double median_of(const double *a, int n)   /* sorted */
 {
     return n % 2 ? a[n / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
@@ -22,7 +29,7 @@ static const char *dl(const double *a, int n, const CalcSettings *s, bool answer
     size_t len = 0;
     b[0] = 0;
     for (int i = 0; i < n && len < sizeof b - 40; i++)
-        len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", i ? ", " : "", answer ? tu_f(a[i], s, 4, -1) : tu_w(a[i]));
+        len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", i ? ", " : "", answer ? ansv(a[i], s) : tu_wx(a[i]));
     return astrdup(b);
 }
 
@@ -38,7 +45,7 @@ static const char *modes(const double *x, const double *w, int n)
     size_t len = 0;
     b[0] = 0;
     for (int i = 0; i < n && len < sizeof b - 30; i++)
-        if (w[i] == best) len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", len ? " and " : "", tu_w(x[i]));
+        if (w[i] == best) len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", len ? " and " : "", tu_wx(x[i]));
     return astrdup(b);
 }
 
@@ -49,9 +56,9 @@ static const char *sum_expr(const double *a, int n)
     size_t len = 0;
     b[0] = 0;
     for (int i = 0; i < n; i++) {
-        const char *w = tu_w(a[i]);
+        const char *w = tu_wx(a[i]);
         len += (size_t)snprintf(b + len, sizeof b - len, "%s%s", i && a[i] >= 0 ? "+" : "", w);
-        if (len >= sizeof b - 20) { double t = 0; for (int k = 0; k < n; k++) t += a[k]; return tu_w(t); }
+        if (len >= sizeof b - 20) { double t = 0; for (int k = 0; k < n; k++) t += a[k]; return tu_wx(t); }
     }
     return astrdup(b);
 }
@@ -74,11 +81,11 @@ RUN(run_list_stats)
     }
     const char *mo = modes(xs, w, k);
     ST("Put the numbers in order", "", "%s", dl(a, n, s, false));
-    ST("Mean", "Add up all the values, divide by how many", "(%s)/%d=%s/%d=%s", sum_expr(a, n), n, tu_w(sum), n, tu_w(mean));
-    ST("Median", n % 2 ? "The middle value" : "Halfway between the two middle values", "%s", tu_w(med));
+    ST("Mean", "Add up all the values, divide by how many", "(%s)/%d=%s/%d=%s", sum_expr(a, n), n, tu_wx(sum), n, tu_wx(mean));
+    ST("Median", n % 2 ? "The middle value" : "Halfway between the two middle values", "%s", tu_wx(med));
     tu_text(o, "Mode", asprintf_a("The most common value: %s", mo));
-    ST("Range", "Biggest - smallest", "%s-%s=%s", tu_w(a[n - 1]), tu_w(a[0]), tu_w(rng));
-    tu_ans(o, asprintf_a("\"Mean\"=%s, \"Median\"=%s, \"Range\"=%s", tu_f(mean, s, 4, -1), tu_w(med), tu_w(rng)),
+    ST("Range", "Biggest - smallest", "%s-%s=%s", tu_wx(a[n - 1]), tu_wx(a[0]), tu_wx(rng));
+    tu_ans(o, asprintf_a("\"Mean\"=%s, \"Median\"=%s, \"Range\"=%s", ansv(mean, s), tu_wx(med), tu_wx(rng)),
            asprintf_a("\"Mode\"=%s", mo));
     tu_val(o, mean);
 }
@@ -100,9 +107,9 @@ RUN(run_freq_table)
     for (int i = 0; i < n; i++) { N += f[i]; fxs[i] = f[i] * x[i]; fx += fxs[i]; }
     if (N <= 0) { tu_fail(o, "Total frequency is 0"); return; }
     double mean = fx / N;
-    ST("Total frequency", "Add the frequencies", "%s", tu_w(N));
+    ST("Total frequency", "Add the frequencies", "%s", tu_wx(N));
     ST("Multiply value × frequency", "", "%s", dl(fxs, n, s, false));
-    ST("Mean", "Total of (value × frequency) ÷ total frequency", "%s/%s=%s", tu_w(fx), tu_w(N), tu_w(mean));
+    ST("Mean", "Total of (value × frequency) ÷ total frequency", "%s/%s=%s", tu_wx(fx), tu_wx(N), tu_wx(mean));
     double pos = (N + 1) / 2, cum = 0, med = x[n - 1];
     int lo = (int)floor(pos), hi = (int)ceil(pos);
     double vlo = x[n - 1], vhi = x[n - 1];
@@ -113,11 +120,11 @@ RUN(run_freq_table)
         if (!ghi && cum >= hi) { vhi = x[i]; ghi = true; }
     }
     med = (vlo + vhi) / 2;
-    ST("Median", asprintf_a("The value in position (N+1)/2 = %s", tu_w(pos)), "%s", tu_w(med));
+    ST("Median", asprintf_a("The value in position (N+1)/2 = %s", tu_wx(pos)), "%s", tu_wx(med));
     const char *mo = modes(x, f, n);
     tu_text(o, "Mode", asprintf_a("The value with the highest frequency: %s", mo));
-    ST("Range", "", "%s-%s=%s", tu_w(x[n - 1]), tu_w(x[0]), tu_w(x[n - 1] - x[0]));
-    tu_ans(o, asprintf_a("\"Mean\"=%s, \"Median\"=%s, \"Range\"=%s", tu_f(mean, s, 4, -1), tu_w(med), tu_w(x[n - 1] - x[0])),
+    ST("Range", "", "%s-%s=%s", tu_wx(x[n - 1]), tu_wx(x[0]), tu_wx(x[n - 1] - x[0]));
+    tu_ans(o, asprintf_a("\"Mean\"=%s, \"Median\"=%s, \"Range\"=%s", ansv(mean, s), tu_wx(med), tu_wx(x[n - 1] - x[0])),
            asprintf_a("\"Mode\"=%s", mo));
     tu_val(o, mean);
 }

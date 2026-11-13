@@ -9,6 +9,7 @@
  *   calc_surd_act.c the Surds action: simplify, rationalise the denominator
  *   calc_convert.c  -> Fraction (incl. recurring decimals), -> Mixed
  *   calc_convert2.c -> Decimal, -> %
+ *   calc_solve*.c   hooks around Solve: messages, factor products, tidy symbolic answers, decimals
  *   calc_number.c   decimal formatting (dp / sf), prime factors, standard form
  * Everything allocates in the current arena. */
 #ifndef ENGINE_CALC_UTIL_H
@@ -76,6 +77,16 @@ void calc_surd(const Expr *t, const CalcSettings *s, CalcResult *out);
 /* ---- roots_eq.c ---- */
 /* "x=-2 and x=-3" -> x^2+5x+6=0 with working. false: not that form (out untouched). */
 bool calc_roots_eq(const Expr *t, CalcResult *out);
+
+/* ---- calc_solve.c / calc_solve_tidy.c: hooks around alg_solve ---- */
+/* Inputs that are not one equation (inequalities in a list, "2x+3y=12 x-y=1"): sets a
+ * message that says what to type. false: nothing wrong, carry on. */
+bool cs_precheck(const Expr *t, const char *raw, CalcResult *out);
+/* (x+a)(x+b)=0 with letters: solve each linear factor. false: not that form (nothing written). */
+bool cs_factor_product(const Expr *t, const CalcSettings *s, Steps *st, Expr **res);
+Expr *cs_decimal_answer(const Expr *res);   /* terminating fractions as decimals; NULL if none */
+Expr *cs_tidy_answer(Expr *res);            /* x=±√(a^2) -> ±a, -2a/2 -> -a, (-b)/a -> -b/a */
+void cs_tidy_steps(Steps *st, bool symbolic);
 
 /* ---- calc_convert*.c ---- */
 void calc_to_fraction(const Expr *t, const CalcSettings *s, CalcResult *out);

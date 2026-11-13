@@ -1,0 +1,102 @@
+# u2.tour - v1.2 calculator-screen guidance check (agent u2). Commands: src/ui/tour_cmds.c.
+# Run: powershell -File tests/vita3k/run.ps1 -Evidence <new dir> -TourFile tests/vita3k/u2.tour
+# Alg keypad is 6 columns x 7 rows (row 4 = index 24 is where focus starts, bottom row = row 6).
+log u2 start
+hist_clear
+set exact 1
+set deg 1
+mode calc
+
+# ---- Algebra first open: the one-time tip toast, then the empty state ----
+mode alg
+# SHOT u2_alg_tip_toast: a toast at the bottom "Tip: press (left arrow) at the keypad's left edge for Solve,
+#   Factorise, Expand..." over the Algebra screen. Behind it: editor placeholder "Type an equation, e.g. x2-5x+6=0",
+#   history pane "History appears here" and a second grey line "Try x2-5x+6=0 then =, or 2x+3y=12, x-y=1 for simultaneous".
+shot u2_alg_tip_toast
+wait 240
+# SHOT u2_alg_empty: same screen with the toast gone (it is shown once per session).
+shot u2_alg_empty
+
+# ---- Actions route ----
+focus keypad
+# SHOT u2_alg_left_edge_hint: keypad focus on the left column (x/7 row); hint bar shows "Press, Delete, Exact/Decimal,
+#   =, (left arrow) Actions, Mode, Settings" with NO "Steps" hint (nothing worked out yet).
+shot u2_alg_left_edge_hint
+press DOWN 2
+# SHOT u2_alg_bottom_row_hint: focus on the bottom-row key "0"; hint bar now reads "(left) (down) Actions".
+shot u2_alg_bottom_row_hint
+press DOWN
+# SHOT u2_alg_actions_focus: focus jumped to the Actions row: "Simplify" button highlighted (first of six),
+#   hint bar "Choose, Apply to the input, =, Mode".
+shot u2_alg_actions_focus
+
+# ---- A simplify with working ----
+osk 3(x+1)-3x
+eval simplify
+# SHOT u2_alg_answer_steps: answer "3" with the "Steps" pill (triangle + count) top right; hint bar includes "Steps".
+shot u2_alg_answer_steps
+steps
+# SHOT u2_steps_hints: working overlay; hint bar reads "(up/down arrows) Scroll  (circle) /  (triangle) Close"
+#   (circle = back glyph). Cards show title, note, maths; only visible cards are drawn each frame.
+shot u2_steps_hints
+close
+
+# ---- No working: triangle toast ----
+mode calc
+input 2+3
+eval auto
+focus keypad
+press TRIANGLE
+# SHOT u2_no_working_toast: answer 5; toast "No working for this answer"; hint bar has NO "Steps" entry.
+shot u2_no_working_toast
+
+# ---- Exact / decimal chip ----
+input 1/3
+eval auto
+# SHOT u2_chip_decimal: answer "1/3"; bottom-left of the answer box shows the square glyph and "Show as decimal".
+shot u2_chip_decimal
+press SQUARE
+# SHOT u2_chip_exact: answer "0.3333333333" with a small accent tag "Decimal" by the label and the chip
+#   "Show as fraction/exact"; hint bar says "Exact/Decimal" (no "S<->D" anywhere).
+shot u2_chip_exact
+press SQUARE
+
+# ---- Engine error: "(circle) to edit", cursor placed at the fault ----
+input 3+*4
+eval auto
+# SHOT u2_error_to_edit: answer box shows "Unexpected * (pos 2)" in red (wrapped if long) and a second line with the
+#   back glyph then "to edit".
+shot u2_error_to_edit
+press BACK
+# SHOT u2_error_cursor: focus is on the editor (accent outline); text cursor sits between "+" and "*" (before the *);
+#   the "to edit" line is gone. A second BACK would delete "+" as normal.
+shot u2_error_cursor
+
+# ---- First-use labels for the fraction key ----
+mode alg
+input
+focus keypad
+# Alg index 15 is the a/b key. SHOT u2_frac_first_use: a toast "Fraction: top over bottom"; editor shows an empty fraction.
+key 15
+shot u2_frac_first_use
+
+mode calc
+input
+focus keypad
+# Calc index 13 is the mixed-number key. SHOT u2_mixed_first_use: toast "Mixed number: 2 1/3"; editor shows an empty mixed template.
+key 13
+shot u2_mixed_first_use
+
+# ---- Graph function list ----
+mode graph
+graph 0 x^2-3x+2
+graph 1 sin(x)
+gsel 0
+# SHOT u2_graph_list: function list with y1, y2 filled; hint bar: "Choose, Type function, Show / hide, Clear row,
+#   Plot, Mode".
+shot u2_graph_list
+gview 0
+# SHOT u2_graph_plot_hints: plot focus; hint bar: "Pan, Zoom, Reset, Roots & turning points, Trace, Table, Functions"
+#   (all seven fit on one line).
+shot u2_graph_plot_hints
+end

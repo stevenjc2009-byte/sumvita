@@ -10,11 +10,13 @@
 #include <string.h>
 
 #define TAB_X0 176
-#define TAB_W 116
+#define TAB_W 106
 #define TAB_GAP 4
-#define CHIP_X 798
-#define CHIP_W 70
-#define GEAR_X 880
+#define CHIP_X 764
+#define CHIP_W 56
+#define HELP_X 828
+#define HELP_W 30
+#define GEAR_X 866
 #define GEAR_W 68
 
 static void *g_logo;
@@ -61,9 +63,12 @@ void topbar_draw(int mode)
 	draw_rrect_ring(CHIP_X, 9, CHIP_W, TOP_H - 18, 8, 1, COL_LINE, COL_PANEL);
 	font_draw_c(FW_BOLD, CHIP_X + CHIP_W / 2, 14, g_set.degrees ? COL_TEXT2 : COL_WARN, 14,
 		    g_set.degrees ? "DEG" : "RAD");
+	/* help chip */
+	draw_rrect_ring(HELP_X, 9, HELP_W, TOP_H - 18, 8, 1, COL_LINE, COL_PANEL);
+	font_draw_c(FW_BOLD, HELP_X + HELP_W / 2, 14, theme_accent(), 14, "?");
 	/* settings gear (DejaVu fallback glyph) + Select hint */
-	font_draw_w(FW_REG, GEAR_X + 4, 9, COL_TEXT2, 22, "\xE2\x9A\x99");
-	draw_glyph(GLYPH_SELECT, GEAR_X + 34, (TOP_H - GLYPH_SIZE) / 2);
+	font_draw_w(FW_REG, GEAR_X + 2, 9, COL_TEXT2, 22, "\xE2\x9A\x99");
+	draw_glyph(GLYPH_SELECT, GEAR_X + 30, (TOP_H - GLYPH_SIZE) / 2);
 }
 
 int topbar_hit(int tx, int ty)
@@ -77,6 +82,8 @@ int topbar_hit(int tx, int ty)
 	}
 	if (tx >= CHIP_X && tx < CHIP_X + CHIP_W)
 		return MODE_COUNT + 1;
+	if (tx >= HELP_X - 4 && tx < HELP_X + HELP_W + 4)
+		return MODE_COUNT + 2;
 	if (tx >= GEAR_X)
 		return MODE_COUNT;
 	return -1;

@@ -69,6 +69,7 @@ const char *tu_sf(double x, int sf);                /* x to sf significant figur
 const char *tu_dp(double x, int dp);                /* fixed decimal places */
 double tu_rsf(double x, int sf);                    /* numeric rounding to sf */
 const char *tu_w(double x);                         /* working value: 6 s.f. trimmed */
+const char *tu_wx(double x);                        /* as tu_w, but keeps all whole-number digits of big values */
 /* answer rounding honouring settings: dp setting wins, then sf, then tool default.
  * def_dp < 0 means the tool defaults to def_sf. */
 const char *tu_f(double x, const CalcSettings *s, int def_sf, int def_dp);

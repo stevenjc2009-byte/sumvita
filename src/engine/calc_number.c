@@ -196,9 +196,10 @@ bool cu_std_parts(const Expr *e, Rat *a, int *n)
     const Expr *x = p->kids[1];
     if (x->kind == E_NEG) {
         if (x->kids[0]->kind != E_NUM || x->kids[0]->r.d != 1) return false;
+        if (x->kids[0]->r.n > 9999) return false;
         *n = (int)-x->kids[0]->r.n;
     } else {
-        if (x->kind != E_NUM || x->r.d != 1 || x->r.n > 300 || x->r.n < -300) return false;
+        if (x->kind != E_NUM || x->r.d != 1 || x->r.n > 9999 || x->r.n < -9999) return false;
         *n = (int)x->r.n;
     }
     return true;
@@ -255,7 +256,23 @@ static void std_already(const Expr *t, Rat a, int n, CalcResult *out)
     out->answer = ans;
     out->answer_alt = d ? d : "";
     out->value = rat_to_double(a) * pow(10, n);
-    out->has_value = true;
+    out->has_value = isfinite(out->value) && out->value != 0;   /* beyond double range: text only */
+}
+
+/* a×10^n with a mantissa outside 1..10 and a power too big for a double: move the point by hand */
+static bool std_huge(const Expr *t, Rat a, int n, CalcResult *out)
+{
+    if (rat_is_zero(a) || (n <= 290 && n >= -290)) return false;
+    for (int i = 0; i < 400 && rat_cmp(rat_abs(a), rat_int(1)) < 0; i++, n--)
+        if (!rat_mul(a, rat_int(10), &a)) return false;
+    for (int i = 0; i < 400 && rat_cmp(rat_abs(a), rat_int(10)) >= 0; i++, n++)
+        if (!rat_div(a, rat_int(10), &a)) return false;
+    if (!std_ok(a) || !cu_exact_dec(a)) return false;
+    out->answer = sci(cu_exact_dec(a), n);
+    steps_add(&out->steps, "Write as a number from 1 to 10 times a power of 10", "", "%s=%s", ex_print(t), out->answer);
+    out->answer_alt = "";
+    out->has_value = false;
+    return true;
 }
 
 void calc_std_form(const Expr *t, const CalcSettings *s, CalcResult *out)
@@ -263,6 +280,7 @@ void calc_std_form(const Expr *t, const CalcSettings *s, CalcResult *out)
     Rat a, val;
     int n;
     if (cu_std_parts(t, &a, &n) && std_ok(a)) { std_already(t, a, n, out); return; }
+    if (cu_std_parts(t, &a, &n) && std_huge(t, a, n, out)) return;
     if (!cu_domain_ok(t, s->degrees, out)) return;
     CVal v;
     if (!cu_value(t, s->degrees, &v)) { cu_fail(out, "Maths error"); return; }

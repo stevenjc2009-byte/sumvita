@@ -70,8 +70,11 @@ static void zeros(int fn, int other, GPKind kind, double x0, double x1)
 				double m = (lo + hi) / 2, fm;
 				if (!fdiff(fn, other, m, &fm))
 					break;
+				if (fm == 0) { lo = hi = m; break; }
 				if ((fm < 0) == (flo < 0)) { lo = m; flo = fm; }
 				else hi = m;
+				if (hi - lo <= 1e-12 * fmax(fabs(lo), fabs(hi)))
+					break;	/* converged to 12 digits */
 			}
 			double r = (lo + hi) / 2, fr, y;
 			/* a sign change through a pole is not a root */

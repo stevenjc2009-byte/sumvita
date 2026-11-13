@@ -16,9 +16,14 @@ void tv_draw_list(void)
 	/* topics */
 	draw_rrect(TV_CAT_X, TV_LIST_Y, TV_CAT_W, TV_LIST_H, 14, COL_BG2);
 	font_draw_w(FW_BOLD, TV_CAT_X + 16, TV_LIST_Y + 12, COL_TEXT, 18, "GCSE topics");
+	{	/* search affordance (tap or triangle) */
+		int sx = TV_CAT_X + TV_CAT_W - 16 - font_width(14, "Search");
+		font_draw(sx, TV_LIST_Y + 15, theme_accent(), 14, "Search");
+		draw_glyph(GLYPH_TRIANGLE, sx - 4 - GLYPH_SIZE, TV_LIST_Y + 15 + (font_height(14) - GLYPH_SIZE) / 2);
+	}
 	for (int i = 0; i < g_tv.ncats; i++) {
 		int y = TV_CAT_ROW_Y + i * TV_CAT_ROW_H;
-		bool sel = i == g_tv.cat;
+		bool sel = i == g_tv.cat && !g_tv.searching;
 		if (sel) {
 			draw_rrect(TV_CAT_X + 6, y + 2, TV_CAT_W - 12, TV_CAT_ROW_H - 4, 10,
 				   g_tv.on_tools ? COL_PANEL2 : theme_accent_soft());
@@ -36,10 +41,25 @@ void tv_draw_list(void)
 		font_draw_c(FW_REG, TV_TOOL_X + TV_TOOL_W / 2, TV_LIST_Y + 100, COL_DIM, 16, "No tools available");
 		return;
 	}
-	font_draw_w(FW_BOLD, TV_TOOL_X + 18, TV_LIST_Y + 12, COL_TEXT, 18, g_tv.cats[g_tv.cat]);
 	char cnt[24];
-	snprintf(cnt, sizeof cnt, "%d tool%s", g_tv.ntools, g_tv.ntools == 1 ? "" : "s");
+	snprintf(cnt, sizeof cnt, "%d %s%s", g_tv.ntools, g_tv.searching ? "match" : "tool",
+		 g_tv.ntools == 1 ? "" : g_tv.searching ? "es" : "s");
 	font_draw_r(FW_REG, TV_TOOL_X + TV_TOOL_W - 18, TV_LIST_Y + 16, COL_DIM, 13, cnt);
+	if (g_tv.searching) {
+		char head[TV_QUERY_MAX + 16];
+		snprintf(head, sizeof head, "Search: %s", g_tv.query);
+		char line[TEXT_LINE_MAX];
+		text_ellipsize(18, head, TV_TOOL_W - 36 - font_width(13, cnt) - 12, line);
+		font_draw_w(FW_BOLD, TV_TOOL_X + 18, TV_LIST_Y + 12, theme_accent(), 18, line);
+		if (g_tv.ntools == 0) {
+			font_draw_c(FW_REG, TV_TOOL_X + TV_TOOL_W / 2, TV_TOOL_ROW_Y + 30, COL_DIM, 16,
+				    "No tools match that word");
+			font_draw_c(FW_REG, TV_TOOL_X + TV_TOOL_W / 2, TV_TOOL_ROW_Y + 56, COL_DIM, 14,
+				    "Try a shorter word, e.g. area, percent, angle");
+		}
+	} else {
+		font_draw_w(FW_BOLD, TV_TOOL_X + 18, TV_LIST_Y + 12, COL_TEXT, 18, g_tv.cats[g_tv.cat]);
+	}
 	for (int r = 0; r < TV_TOOL_ROWS; r++) {
 		int i = g_tv.tool_scroll + r;
 		if (i >= g_tv.ntools)
@@ -51,8 +71,11 @@ void tv_draw_list(void)
 		if (sel)
 			draw_rrect_outline(TV_TOOL_X + 8, y + 2, TV_TOOL_W - 16, TV_TOOL_ROW_H - 4, 10, 2, theme_accent());
 		char line[TEXT_LINE_MAX];
-		text_ellipsize(17, t->name, TV_TOOL_W - 70, line);
+		int tag_w = g_tv.searching ? font_width(12, t->category) + 16 : 0;   /* topic of a search hit */
+		text_ellipsize(17, t->name, TV_TOOL_W - 70 - tag_w, line);
 		font_draw_w(FW_MED, TV_TOOL_X + 22, y + 8, sel ? COL_TEXT : COL_TEXT2, 17, line);
+		if (tag_w)
+			font_draw_r(FW_REG, TV_TOOL_X + TV_TOOL_W - 44, y + 11, COL_DIM, 12, t->category);
 		text_ellipsize(13, t->desc ? t->desc : "", TV_TOOL_W - 70, line);
 		font_draw(TV_TOOL_X + 22, y + 32, COL_MUTED, 13, line);
 		font_draw_r(FW_REG, TV_TOOL_X + TV_TOOL_W - 24, y + 16, sel ? theme_accent() : COL_DIM, 18, "\xE2\x80\xBA");
@@ -112,7 +135,7 @@ static void draw_result(int x, int y, int w, int h)
 			font_draw(x + 16, y + 44 + i * 20, COL_DIM, 14, lines[i]);
 		return;
 	}
-	font_draw_w(FW_MED, x + 16, y + 12, r->ok ? COL_MUTED : COL_ERR, 14, r->ok ? "Answer" : "Can't work that out");
+	font_draw_w(FW_MED, x + 16, y + 12, r->ok ? COL_MUTED : COL_ERR, 14, r->ok ? "Answer" : "Couldn't work that out");
 	if (!r->ok) {
 		char lines[4][TEXT_LINE_MAX];
 		int n = text_wrap(15, r->error, w - 32, 4, lines);

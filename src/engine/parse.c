@@ -8,6 +8,7 @@
 #include "arena.h"
 #include "expr.h"
 #include "parse_int.h"
+#include "parse_norm.h"
 
 #define MAX_DEPTH 200
 
@@ -54,10 +55,7 @@ static Expr *fail_msg(P *p, const Tok *t, const char *msg)
 
 static Expr *fail_unexpected(P *p, const Tok *t)
 {
-    char msg[64];
-    if (t->k == TK_END) return fail_msg(p, t, "Unexpected end");
-    snprintf(msg, sizeof msg, "Unexpected %.*s", t->len > 20 ? 20 : t->len, p->src + t->pos);
-    return fail_msg(p, t, msg);
+    return fail_msg(p, t, t->k == TK_END ? "Something is missing at the end" : "That symbol can't go there");
 }
 
 static Expr *parse_list(P *p);
@@ -126,7 +124,7 @@ static Expr *parse_rel(P *p)
     int nk = 1;
     kids[0] = first;
     while (cur(p)->k == TK_REL) {
-        if (nk - 1 >= EXPR_MAX_REL) return fail_msg(p, cur(p), "Too many relations");
+        if (nk - 1 >= EXPR_MAX_REL) return fail_msg(p, cur(p), "Use only one = or < sign between two sides");
         ops[nk - 1] = cur(p)->op;
         advance(p);
         Expr *r = rel_side(p, false);
@@ -196,7 +194,7 @@ static Expr *parse_term(P *p)
 
 static Expr *parse_unary(P *p)
 {
-    if (++p->depth > MAX_DEPTH) return fail_msg(p, cur(p), "Too complicated");
+    if (++p->depth > MAX_DEPTH) return fail_msg(p, cur(p), "That is too long: split it into smaller parts");
     Expr *r;
     TokKind k = cur(p)->k;
     if (k == TK_MINUS || k == TK_PLUS || k == TK_PM) {
@@ -247,7 +245,7 @@ static bool parse_bracketed(P *p, Vec *args, Expr **out)
     bool as_args = args != NULL;
     Tok *open = cur(p);
     advance(p);
-    if (cur(p)->k == TK_RP) { fail_msg(p, cur(p), "Empty brackets"); return false; }
+    if (cur(p)->k == TK_RP) { fail_msg(p, cur(p), "There is nothing inside the brackets"); return false; }
     int saved = p->absdepth;
     p->absdepth = 0;
     Expr *in = NULL;
@@ -266,10 +264,10 @@ static bool parse_bracketed(P *p, Vec *args, Expr **out)
     p->absdepth = saved;
     Tok *c = cur(p);
     if (c->k != TK_RP) {
-        if (c->k == TK_END) fail_msg(p, c, "Missing )"); else fail_unexpected(p, c);
+        if (c->k == TK_END) fail_msg(p, c, open->op == '(' ? "A bracket is missing: add a )" : "A bracket is missing: add a ]"); else fail_unexpected(p, c);
         return false;
     }
-    if ((open->op == '(') != (c->op == ')')) { fail_msg(p, c, "Brackets don't match"); return false; }
+    if ((open->op == '(') != (c->op == ')')) { fail_msg(p, c, "The brackets don't match: use ( with ) and [ with ]"); return false; }
     advance(p);
     if (out) *out = in;
     return true;
@@ -289,8 +287,9 @@ static Expr *parse_func(P *p)
         vpush(&args, a);
     } else {
         if ((fid == F_ROOT && var != FV_CBRT) || fid == F_NCR || fid == F_NPR) {
-            char msg[48];
-            snprintf(msg, sizeof msg, "%.*s needs brackets", ft->len, p->src + ft->pos);
+            char msg[64];
+            snprintf(msg, sizeof msg, "Put brackets after %.*s, like %.*s(...)", ft->len, p->src + ft->pos, ft->len,
+                     p->src + ft->pos);
             return fail_msg(p, cur(p), msg);
         }
         Vec v = {0};
@@ -307,8 +306,9 @@ static Expr *parse_func(P *p)
     if (fid == F_LOG) hi = 2;
     if ((fid == F_ROOT && var != FV_CBRT) || fid == F_NCR || fid == F_NPR) lo = hi = 2;
     if (args.n < lo || args.n > hi) {
-        char msg[64];
-        snprintf(msg, sizeof msg, "Wrong number of values for %.*s", ft->len, p->src + ft->pos);
+        char msg[80];
+        snprintf(msg, sizeof msg, "%.*s needs %s in the brackets", ft->len, p->src + ft->pos,
+                 lo != hi ? "1 or 2 values" : (hi == 1 ? "1 value" : "2 values, separated by a comma"));
         return fail_msg(p, ft, msg);
     }
     if (var == FV_CBRT) return ex_func2(F_ROOT, ex_int(3), args.v[0]);
@@ -319,7 +319,7 @@ static Expr *parse_func(P *p)
 
 static Expr *parse_primary(P *p)
 {
-    if (++p->depth > MAX_DEPTH) return fail_msg(p, cur(p), "Too complicated");
+    if (++p->depth > MAX_DEPTH) return fail_msg(p, cur(p), "That is too long: split it into smaller parts");
     Tok *t = cur(p);
     Expr *r = NULL;
     switch (t->k) {
@@ -337,7 +337,7 @@ static Expr *parse_primary(P *p)
         Expr *in = parse_add(p);
         p->absdepth--;
         if (!in) return NULL;
-        if (cur(p)->k != TK_BAR) return fail_msg(p, cur(p), "Missing |");
+        if (cur(p)->k != TK_BAR) return fail_msg(p, cur(p), "The | is not closed: add another |");
         advance(p);
         r = ex_func1(F_ABS, in);
         break;
@@ -352,7 +352,7 @@ static Expr *parse_primary(P *p)
     return r;
 }
 
-Expr *ex_parse(const char *src, char *err, int errcap, int *err_pos)
+static Expr *parse_plain(const char *src, char *err, int errcap, int *err_pos)
 {
     if (err && errcap > 0) err[0] = 0;
     if (err_pos) *err_pos = -1;
@@ -360,9 +360,20 @@ Expr *ex_parse(const char *src, char *err, int errcap, int *err_pos)
     Tok *toks;
     int n;
     if (!lex_all(src, &toks, &n, err, errcap, err_pos)) return NULL;
+    pn_unify_x(toks, n);
     P p = {src, toks, 0, err, errcap, err_pos, false, 0, 0};
-    if (n == 1) return fail_msg(&p, &toks[0], "Empty input");
+    if (n == 1) return fail_msg(&p, &toks[0], "Type something first");
     Expr *e = parse_list(&p);
     if (e && cur(&p)->k != TK_END) fail_unexpected(&p, cur(&p));
     return p.failed ? NULL : e;
+}
+
+Expr *ex_parse(const char *src, char *err, int errcap, int *err_pos)
+{
+    int *map;
+    if (!src) src = "";
+    const char *norm = pn_normalise(src, &map);
+    Expr *e = parse_plain(norm, err, errcap, err_pos);
+    if (!e && map && err_pos && *err_pos >= 0) *err_pos = map[*err_pos];
+    return e;
 }

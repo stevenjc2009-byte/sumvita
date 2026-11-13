@@ -26,6 +26,7 @@ typedef enum {
 
 void draw_rect(int x, int y, int w, int h, unsigned int color);
 void draw_rrect(int x, int y, int w, int h, int r, unsigned int color);
+/* Rects, rrects, outlines, shadows and thick lines: one draw call each (draw_shape.c). */
 /* Rounded outline of thickness t (drawn as two filled rrects: needs a fill colour
  * for the inside; pass inner = 0 to draw only the ring over an existing fill). */
 void draw_rrect_ring(int x, int y, int w, int h, int r, int t, unsigned int ring, unsigned int inner);
@@ -41,6 +42,14 @@ void draw_disc(float cx, float cy, float r, unsigned int color);
 void draw_ring(float cx, float cy, float r, float t, unsigned int color, unsigned int inner);
 /* Dashed rectangle outline (empty slot placeholder). */
 void draw_dashed_rect(int x, int y, int w, int h, unsigned int color);
+
+/* Shape run: draw_rect / draw_rrect / draw_rrect_ring / draw_rrect_outline /
+ * draw_shadow / draw_line_w / draw_gradient_v / draw_border / draw_dashed_rect
+ * between begin and end go to the GPU as one draw call, in order. Nothing
+ * else (text, discs, glyphs, textures, clipping) may be drawn inside a run.
+ * Runs nest; the outermost end draws. (draw_shape.c) */
+void draw_shapes_begin(void);
+void draw_shapes_end(void);
 
 /* Scissor to a rectangle; draw_clip_off() restores full-screen drawing. */
 void draw_clip(int x, int y, int w, int h);

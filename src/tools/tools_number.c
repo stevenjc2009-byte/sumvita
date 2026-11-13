@@ -52,6 +52,7 @@ RUN(run_pct_adjust)
     double a, p;
     if (!tu_num(o, "Amount", v[0], &a) || !tu_num(o, "Percentage", v[1], &p) || !tu_nonneg(o, "Amount", a)) return;
     bool up = tu_choice("increase|decrease", v[2]) == 0;
+    if (!up && p > 100) { tu_fail(o, "A decrease can't be more than 100%%"); return; }
     double m = up ? 1 + p / 100 : 1 - p / 100;
     double r = a * m;
     ST("Find the multiplier", up ? "Increase: 1 + p/100" : "Decrease: 1 - p/100", "m=1%s%s/100=%s", up ? "+" : "-", tu_w(p), tu_w(m));
@@ -112,6 +113,7 @@ RUN(run_vat)
         tu_ans(o, tu_f(r, s, 8, 2), asprintf_a("\"VAT %s\"", tu_dp(r - pr, 2)));
         tu_val(o, r);
     } else {
+        if (m <= 0) { tu_fail(o, "Rate %s%% is too low: removing VAT needs a rate above -100%%", tu_w(rate)); return; }
         double r = pr / m;
         ST("Price including VAT is", "", "%s%% of the price before VAT", tu_w(m * 100));
         ST("Divide by the multiplier", "", "%s/%s=%s", tu_w(pr), tu_w(m), tu_dp(r, 2));
@@ -237,14 +239,24 @@ RUN(run_bounds_calc)
     case 1: lo = al - bu; hi = au - bl;
         ST("Upper bound: biggest a, smallest b", "", "%s-%s=%s", tu_w(au), tu_w(bl), tu_w(hi));
         ST("Lower bound: smallest a, biggest b", "", "%s-%s=%s", tu_w(al), tu_w(bu), tu_w(lo)); break;
-    case 2: lo = al * bl; hi = au * bu;
-        ST("Upper bound: both upper bounds", "", "%s×%s=%s", tu_w(au), tu_w(bu), tu_w(hi));
-        ST("Lower bound: both lower bounds", "", "%s×%s=%s", tu_w(al), tu_w(bl), tu_w(lo)); break;
-    default:
-        if (bl <= 0) { tu_fail(o, "b could be 0 or negative"); return; }
-        lo = al / bu; hi = au / bl;
-        ST("Upper bound: biggest a, smallest b", "", "%s/%s=%s", tu_w(au), tu_w(bl), tu_w(hi));
-        ST("Lower bound: smallest a, biggest b", "", "%s/%s=%s", tu_w(al), tu_w(bu), tu_w(lo)); break;
+    default: {
+        double c[4];
+        if (op == 3 && bl <= 0 && bu >= 0) { tu_fail(o, "b could be 0, so a÷b has no bounds"); return; }
+        const char *sy = op == 2 ? "×" : "/", *an[4] = { "a lower", "a lower", "a upper", "a upper" };
+        const char *bn[4] = { "b lower", "b upper", "b lower", "b upper" };
+        double xa[4] = { al, al, au, au }, xb[4] = { bl, bu, bl, bu };
+        int imin = 0, imax = 0;
+        for (int i = 0; i < 4; i++) {
+            c[i] = op == 2 ? xa[i] * xb[i] : xa[i] / xb[i];
+            if (c[i] < c[imin]) imin = i;
+            if (c[i] > c[imax]) imax = i;
+        }
+        lo = c[imin]; hi = c[imax];
+        ST("Try all four corners", "Negative values can swap which corner is biggest", "%s,%s,%s,%s", tu_w(c[0]), tu_w(c[1]), tu_w(c[2]), tu_w(c[3]));
+        ST(asprintf_a("Upper bound: %s, %s", an[imax], bn[imax]), "The biggest corner", "%s%s%s=%s", tu_w(xa[imax]), sy, tu_w(xb[imax]), tu_w(hi));
+        ST(asprintf_a("Lower bound: %s, %s", an[imin], bn[imin]), "The smallest corner", "%s%s%s=%s", tu_w(xa[imin]), sy, tu_w(xb[imin]), tu_w(lo));
+        break;
+    }
     }
     int bsf = op == 3 ? 5 : 8;   /* a÷b rarely ends: 5 s.f. */
     tu_ans(o, asprintf_a("\"Upper bound\"=%s, \"Lower bound\"=%s", tu_f(hi, s, bsf, -1), tu_f(lo, s, bsf, -1)), "");
@@ -266,11 +278,12 @@ RUN(run_round)
     double ax = fabs(x);
     double scaled = dp >= 0 ? ax * pow(10, dp + 1) : ax / pow(10, -dp - 1);
     int digit = (int)fmod(floor(scaled + 1e-7), 10.0);
-    if (sf) tu_text(o, "Count significant figures", asprintf_a("%s to %lld s.f. means %d decimal places (start at the first non-zero digit)", tu_w(x), (long long)n, dp > 0 ? dp : 0));
+    if (sf) tu_text(o, "Count significant figures", asprintf_a("%s to %lld s.f. means %d decimal %s (start at the first non-zero digit)", tu_w(x), (long long)n, dp > 0 ? dp : 0, dp == 1 ? "place" : "places"));
     ST("Look at the next digit", "The digit after the last one you keep", "digit=%d", digit);
     ST(digit >= 5 ? "5 or more: round up" : "Less than 5: round down", "", "%s", "");
     double r = dp >= 0 ? round(x * pow(10, dp) + copysign(1e-9, x)) / pow(10, dp)
                        : round(x / pow(10, -dp)) * pow(10, -dp);
+    if (sf && r != 0) dp = (int)n - 1 - (int)floor(log10(fabs(r)) + 1e-12);   /* carry: 9.96 -> 10 */
     const char *res = tu_dp(r, dp > 0 ? dp : 0);
     tu_ans(o, res, asprintf_a("\"to %lld %s\"", (long long)n, sf ? "s.f." : "d.p."));
     tu_val(o, r);

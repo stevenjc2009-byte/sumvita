@@ -3,6 +3,7 @@
 #include "ui/graph_int.h"
 
 #include "ui/draw.h"
+#include "ui/draw_batch.h"
 #include "ui/font.h"
 #include "ui/mlayout.h"
 #include "ui/theme.h"
@@ -85,25 +86,39 @@ static void grid(void)
 	double y0 = g_py_to_y(G_PH), y1 = g_py_to_y(0);
 	if (show_minor) {
 		for (double v = floor(x0 / minor) * minor, g_ = 0; v <= x1 && g_ < 300; v += minor, g_++)
-			draw_rect(G_PX + (int)lround(g_x_to_px(v)), G_PY, 1, G_PH, RGBA8(255, 255, 255, 9));
+			batch_rect(G_PX + (int)lround(g_x_to_px(v)), G_PY, 1, G_PH, RGBA8(255, 255, 255, 9));
 		for (double v = floor(y0 / minor) * minor, g_ = 0; v <= y1 && g_ < 300; v += minor, g_++)
-			draw_rect(G_PX, G_PY + (int)lround(g_y_to_py(v)), G_PW, 1, RGBA8(255, 255, 255, 9));
+			batch_rect(G_PX, G_PY + (int)lround(g_y_to_py(v)), G_PW, 1, RGBA8(255, 255, 255, 9));
 	}
 	for (double v = floor(x0 / step) * step, g_ = 0; v <= x1 && g_ < 300; v += step, g_++)
-		draw_rect(G_PX + (int)lround(g_x_to_px(v)), G_PY, 1, G_PH, RGBA8(255, 255, 255, 22));
+		batch_rect(G_PX + (int)lround(g_x_to_px(v)), G_PY, 1, G_PH, RGBA8(255, 255, 255, 22));
 	for (double v = floor(y0 / step) * step, g_ = 0; v <= y1 && g_ < 300; v += step, g_++)
-		draw_rect(G_PX, G_PY + (int)lround(g_y_to_py(v)), G_PW, 1, RGBA8(255, 255, 255, 22));
+		batch_rect(G_PX, G_PY + (int)lround(g_y_to_py(v)), G_PW, 1, RGBA8(255, 255, 255, 22));
 
 	/* axes (pinned to the edge when off screen, for the labels) */
 	int ax = (int)lround(g_x_to_px(0)), ay = (int)lround(g_y_to_py(0));
 	bool ax_in = ax >= 0 && ax <= G_PW, ay_in = ay >= 0 && ay <= G_PH;
 	if (ax_in)
-		draw_rect(G_PX + ax, G_PY, 2, G_PH, COL_MUTED);
+		batch_rect(G_PX + ax, G_PY, 2, G_PH, COL_MUTED);
 	if (ay_in)
-		draw_rect(G_PX, G_PY + ay, G_PW, 2, COL_MUTED);
+		batch_rect(G_PX, G_PY + ay, G_PW, 2, COL_MUTED);
 	int ly = ay_in ? ay : (ay < 0 ? 0 : G_PH - 20);
 	if (ly > G_PH - 20) ly = G_PH - 20;
 	int lx = ax_in ? ax : (ax < 0 ? 0 : G_PW - 4);
+	/* tick marks: same colour as the axes, so they join that batch */
+	for (double v = floor(x0 / step) * step, g_ = 0; v <= x1 && g_ < 300; v += step, g_++) {
+		double r = round(v / step) * step;
+		int px = (int)lround(g_x_to_px(r));
+		if (fabs(r) >= step / 2 && px >= 14 && px <= G_PW - 14 && ay_in)
+			batch_rect(G_PX + px, G_PY + ay - 4, 1, 10, COL_MUTED);
+	}
+	for (double v = floor(y0 / step) * step, g_ = 0; v <= y1 && g_ < 300; v += step, g_++) {
+		double r = round(v / step) * step;
+		int py = (int)lround(g_y_to_py(r));
+		if (fabs(r) >= step / 2 && py >= 20 && py <= G_PH - 12 && ax_in)
+			batch_rect(G_PX + ax - 4, G_PY + py, 10, 1, COL_MUTED);
+	}
+	batch_end();
 	char buf[24];
 	for (double v = floor(x0 / step) * step, g_ = 0; v <= x1 && g_ < 300; v += step, g_++) {
 		double r = round(v / step) * step;
@@ -112,8 +127,6 @@ static void grid(void)
 		int px = (int)lround(g_x_to_px(r));
 		if (px < 14 || px > G_PW - 14)
 			continue;
-		if (ay_in)
-			draw_rect(G_PX + px, G_PY + ay - 4, 1, 10, COL_MUTED);
 		g_fmt(r, buf, sizeof buf);
 		font_draw_c(FW_REG, G_PX + px, G_PY + ly + 6, COL_MUTED, 13, buf);
 	}
@@ -124,8 +137,6 @@ static void grid(void)
 		int py = (int)lround(g_y_to_py(r));
 		if (py < 20 || py > G_PH - 12)
 			continue;
-		if (ax_in)
-			draw_rect(G_PX + ax - 4, G_PY + py, 10, 1, COL_MUTED);
 		g_fmt(r, buf, sizeof buf);
 		if (lx > G_PW - 60)
 			font_draw_r(FW_REG, G_PX + lx - 10, G_PY + py - 17, COL_MUTED, 13, buf);
@@ -151,15 +162,21 @@ static bool clip_y(double *x0, double *y0, double *x1, double *y1, double top, d
 	return true;
 }
 
+/* one curve: segments are collected first so that joined neighbours can be
+ * overlapped (no gaps at bends); breaks at asymptotes stay breaks. */
 static void curve(int fn)
 {
+	static float sg[G_PW][4];
+	static bool ok[G_PW];
 	g_samples(fn);
 	const float *ys = g_gs.fn[fn].ys;
 	if (!ys)
 		return;
 	unsigned int c = theme_graph_colour(fn);
 	float w = fn == g_gs.sel && g_gs.mode != GM_NONE ? 3.4f : 2.6f;
+	w = (float)(int)(w + 0.5f);	/* the pen was whole pixels wide */
 	for (int i = 0; i < G_PW; i++) {
+		ok[i] = false;
 		if (isnan(ys[i]) || isnan(ys[i + 1]))
 			continue;
 		double py0 = g_y_to_py(ys[i]), py1 = g_y_to_py(ys[i + 1]);
@@ -175,8 +192,20 @@ static void curve(int fn)
 		double x0 = i, x1 = i + 1;
 		if (!clip_y(&x0, &py0, &x1, &py1, -4, G_PH + 4))
 			continue;
-		draw_line_w((float)(G_PX + x0), (float)(G_PY + py0), (float)(G_PX + x1), (float)(G_PY + py1), w, c);
+		sg[i][0] = (float)(G_PX + x0);
+		sg[i][1] = (float)(G_PY + py0);
+		sg[i][2] = (float)(G_PX + x1);
+		sg[i][3] = (float)(G_PY + py1);
+		ok[i] = true;
 	}
+	for (int i = 0; i < G_PW; i++) {
+		if (!ok[i])
+			continue;
+		int e0 = i > 0 && ok[i - 1] && sg[i - 1][2] == sg[i][0] && sg[i - 1][3] == sg[i][1];
+		int e1 = i + 1 < G_PW && ok[i + 1] && sg[i + 1][0] == sg[i][2] && sg[i + 1][1] == sg[i][3];
+		batch_line(sg[i][0], sg[i][1], sg[i][2], sg[i][3], w, c, e0, e1);
+	}
+	batch_end();
 }
 
 static void trace_marker(void)
@@ -185,7 +214,8 @@ static void trace_marker(void)
 	double x = g_gs.trace_x, y;
 	int px = (int)lround(g_x_to_px(x));
 	for (int py = 0; py < G_PH; py += 8)
-		draw_rect(G_PX + px, G_PY + py, 1, 4, COL_DIM);
+		batch_rect(G_PX + px, G_PY + py, 1, 4, COL_DIM);
+	batch_end();
 	char xs[24], ys[24], line[64];
 	g_fmt(x, xs, sizeof xs);
 	bool ok = g_eval(fn, x, &y);

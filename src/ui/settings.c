@@ -22,6 +22,7 @@ void settings_defaults(void)
 	g_set.sf = 0;
 	g_set.prefer_exact = true;
 	g_set.accent = 0;
+	g_set.seen_help = false;
 	theme_set_accent(0);
 }
 
@@ -44,6 +45,7 @@ void settings_load(void)
 		else if (!strcmp(line, "dp")) g_set.dp = clampi(v, -1, 9);
 		else if (!strcmp(line, "sf")) g_set.sf = clampi(v, 0, 10);
 		else if (!strcmp(line, "exact")) g_set.prefer_exact = v != 0;
+		else if (!strcmp(line, "seen_help")) g_set.seen_help = v != 0;
 		else if (!strcmp(line, "accent")) g_set.accent = clampi(v, 0, theme_accent_count() - 1);
 	}
 	fclose(f);
@@ -61,8 +63,8 @@ void settings_save(void)
 		log_printf("settings: cannot write %s", SETTINGS_PATH);
 		return;
 	}
-	fprintf(f, "degrees=%d\ndp=%d\nsf=%d\nexact=%d\naccent=%d\n", g_set.degrees ? 1 : 0, g_set.dp, g_set.sf,
-		g_set.prefer_exact ? 1 : 0, g_set.accent);
+	fprintf(f, "degrees=%d\ndp=%d\nsf=%d\nexact=%d\naccent=%d\nseen_help=%d\n", g_set.degrees ? 1 : 0, g_set.dp,
+		g_set.sf, g_set.prefer_exact ? 1 : 0, g_set.accent, g_set.seen_help ? 1 : 0);
 	fclose(f);
 }
 
@@ -75,6 +77,21 @@ void settings_calc(CalcSettings *cs)
 	cs->prefer_exact = g_set.prefer_exact;
 	cs->ans = g_ans;
 	cs->ans_set = g_ans_set;
+}
+
+/* "01.10" -> "1.1.0": major.minor from the two numbers, patch 0 */
+const char *settings_version(void)
+{
+	static char buf[16];
+	if (!buf[0]) {
+		/* APP_VER "01.10" is v1.1.0: the two digits after the dot are minor and patch */
+		int major = 0, minor = 0, patch = 0;
+		if (sscanf(SUMVITA_VERSION, "%d.%1d%1d", &major, &minor, &patch) == 3)
+			snprintf(buf, sizeof buf, "%d.%d.%d", major, minor, patch);
+		else
+			snprintf(buf, sizeof buf, "%s", SUMVITA_VERSION);
+	}
+	return buf;
 }
 
 void settings_set_ans(double v)
